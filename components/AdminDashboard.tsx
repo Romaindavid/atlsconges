@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe } from '@/app/admin/actions'
-import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye } from '@/app/admin/actions'
+import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart } from '@/app/admin/actions'
 import { formatDateFR } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 
@@ -65,6 +65,7 @@ export default function AdminDashboard({
   const [empModal, setEmpModal] = useState<{ mode: 'create' | 'edit'; employe?: Employe } | null>(null)
   const [empNom, setEmpNom] = useState('')
   const [empPrenom, setEmpPrenom] = useState('')
+  const [empSoldeDepart, setEmpSoldeDepart] = useState('')
   const [empErreur, setEmpErreur] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
@@ -118,6 +119,7 @@ export default function AdminDashboard({
   function ouvrirCreationEmploye() {
     setEmpNom('')
     setEmpPrenom('')
+    setEmpSoldeDepart('0')
     setEmpErreur('')
     setEmpModal({ mode: 'create' })
   }
@@ -125,18 +127,29 @@ export default function AdminDashboard({
   function ouvrirEditionEmploye(emp: Employe) {
     setEmpNom(emp.nom)
     setEmpPrenom(emp.prenom)
+    setEmpSoldeDepart(String(emp.solde_depart_recuperation ?? 0))
     setEmpErreur('')
     setEmpModal({ mode: 'edit', employe: emp })
   }
 
   async function sauvegarderEmploye() {
     setEmpErreur('')
+    const solde = parseFloat(empSoldeDepart.replace(',', '.')) || 0
     startTransition(async () => {
       let res
       if (empModal?.mode === 'create') {
         res = await createEmploye(empNom, empPrenom)
+        // Après création, mettre à jour le solde de départ si non nul
+        if (res.success && solde !== 0) {
+          // On refresh pour récupérer l'ID du nouvel employé
+          router.refresh()
+        }
       } else if (empModal?.employe) {
-        res = await updateEmploye(empModal.employe.id, empNom, empPrenom)
+        const [resEmp, resSolde] = await Promise.all([
+          updateEmploye(empModal.employe.id, empNom, empPrenom),
+          updateSoldeDepart(empModal.employe.id, solde),
+        ])
+        res = resEmp.success ? resSolde : resEmp
       } else return
 
       if (res.success) {
@@ -636,14 +649,28 @@ export default function AdminDashboard({
                     <tr>
                       <th className="text-left px-5 py-3 text-marine-600 font-semibold text-sm">Nom</th>
                       <th className="text-left px-5 py-3 text-marine-600 font-semibold text-sm">Prénom</th>
+                      <th className="px-4 py-3 text-center text-marine-600 font-semibold text-sm" title="Solde de départ récupération d'heures">
+                        Solde départ récup.
+                      </th>
                       <th className="px-5 py-3 text-right text-marine-600 font-semibold text-sm">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-marine-100">
-                    {employes.map((emp) => (
+                    {employes.map((emp) => {
+                      const sd = emp.solde_depart_recuperation ?? 0
+                      return (
                       <tr key={emp.id} className="hover:bg-marine-50 transition-colors">
                         <td className="px-5 py-4 text-marine-800 font-semibold">{emp.nom}</td>
                         <td className="px-5 py-4 text-marine-700">{emp.prenom}</td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`text-sm font-bold px-2 py-1 rounded-lg ${
+                            sd > 0 ? 'bg-success-100 text-success-600' :
+                            sd < 0 ? 'bg-danger-100 text-danger-600'   :
+                                     'text-marine-400'
+                          }`}>
+                            {sd > 0 ? '+' : ''}{sd}h
+                          </span>
+                        </td>
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
                             <button
@@ -661,7 +688,8 @@ export default function AdminDashboard({
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -779,6 +807,22 @@ export default function AdminDashboard({
                   value={empPrenom}
                   onChange={(e) => setEmpPrenom(e.target.value)}
                   placeholder="Ex : Jean"
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-marine-700 font-semibold mb-1">
+                  ⏱ Solde de départ récupération (h)
+                </label>
+                <p className="text-marine-400 text-xs mb-2">
+                  Heures déjà accumulées avant l'utilisation de l'appli. Positif = l'entreprise doit. Négatif = à rattraper.
+                </p>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={empSoldeDepart}
+                  onChange={(e) => setEmpSoldeDepart(e.target.value)}
+                  placeholder="0"
                   className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
                 />
               </div>

@@ -1,5 +1,5 @@
 import { isEmployeeAuthenticated, getEmployeeSession, getAbsencesEmployee } from './actions'
-import { getFeuillesMois } from './temps/actions'
+import { getFeuillesMois, getSoldeRecupComplet } from './temps/actions'
 import { getEmployes } from './admin/actions'
 import EmployeePasswordForm from '@/components/EmployeePasswordForm'
 import EmployeeNameSelect from '@/components/EmployeeNameSelect'
@@ -26,9 +26,10 @@ export default async function HomePage() {
   const mois  = now.getMonth() + 1
   const annee = now.getFullYear()
 
-  const [absences, entries] = await Promise.all([
+  const [absences, entries, soldeRecupInitial] = await Promise.all([
     getAbsencesEmployee(employee.nom, employee.prenom),
     getFeuillesMois(employee.nom, employee.prenom, mois, annee),
+    getSoldeRecupComplet(employee.nom, employee.prenom, employee.id),
   ])
 
   return (
@@ -38,6 +39,7 @@ export default async function HomePage() {
       entriesInitiales={entries}
       moisInitial={mois}
       anneeInitiale={annee}
+      soldeRecupInitial={soldeRecupInitial}
     />
   )
 }

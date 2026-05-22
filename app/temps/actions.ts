@@ -129,3 +129,32 @@ export async function sauvegarderJournee(
 
   return { success: true, message: 'Journée enregistrée.' }
 }
+
+/**
+ * Solde de récupération total sur tout l'historique :
+ *   solde_depart_recuperation (DB employes) + somme de tous les heures_a_recuperer
+ */
+export async function getSoldeRecupComplet(
+  nom: string,
+  prenom: string,
+  employeId: string
+): Promise<number> {
+  const supabase = getSupabase()
+  const [feuillesRes, empRes] = await Promise.all([
+    supabase
+      .from('feuilles_temps')
+      .select('heures_a_recuperer')
+      .eq('nom', nom)
+      .eq('prenom', prenom),
+    supabase
+      .from('employes')
+      .select('solde_depart_recuperation')
+      .eq('id', employeId)
+      .single(),
+  ])
+  const totalRecup = (feuillesRes.data ?? []).reduce(
+    (s: number, e: { heures_a_recuperer: number }) => s + (e.heures_a_recuperer ?? 0), 0
+  )
+  const soldeDepart = (empRes.data as { solde_depart_recuperation?: number } | null)?.solde_depart_recuperation ?? 0
+  return Number((soldeDepart + totalRecup).toFixed(2))
+}

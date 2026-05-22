@@ -13,6 +13,7 @@ type Props = {
   entriesInitiales: JourneeEntry[]
   moisInitial: number
   anneeInitiale: number
+  soldeRecupInitial: number
 }
 
 const STATUT_CONFIG = {
@@ -21,7 +22,7 @@ const STATUT_CONFIG = {
   refuse:     { label: 'Refusé',     emoji: '❌', bg: 'bg-danger-100',   text: 'text-danger-600',   border: 'border-danger-600/20'   },
 }
 
-export default function EmployeeDashboard({ employee, absences, entriesInitiales, moisInitial, anneeInitiale }: Props) {
+export default function EmployeeDashboard({ employee, absences, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial }: Props) {
   const router = useRouter()
 
   async function handleChange() {
@@ -74,6 +75,7 @@ export default function EmployeeDashboard({ employee, absences, entriesInitiales
               entriesInitiales={entriesInitiales}
               moisInitial={moisInitial}
               anneeInitiale={anneeInitiale}
+              soldeRecupInitial={soldeRecupInitial}
             />
           </section>
 

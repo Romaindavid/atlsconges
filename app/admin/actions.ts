@@ -172,6 +172,7 @@ export type Employe = {
   prenom: string
   actif: boolean
   created_at: string
+  solde_depart_recuperation: number
 }
 
 export async function getEmployes(): Promise<Employe[]> {
@@ -218,6 +219,18 @@ export async function updateEmploye(
 
   if (error) return { success: false, message: 'Erreur lors de la mise à jour.' }
   return { success: true, message: 'Employé modifié.' }
+}
+
+export async function updateSoldeDepart(
+  id: string,
+  solde: number
+): Promise<{ success: boolean; message: string }> {
+  const { error } = await getSupabase()
+    .from('employes')
+    .update({ solde_depart_recuperation: solde })
+    .eq('id', id)
+  if (error) return { success: false, message: 'Erreur lors de la mise à jour.' }
+  return { success: true, message: 'Solde de départ mis à jour.' }
 }
 
 export async function deleteEmploye(

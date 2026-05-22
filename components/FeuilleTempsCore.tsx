@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { getFeuillesMois, sauvegarderJournee } from '@/app/temps/actions'
+import { getFeuillesMois, sauvegarderJournee, getSoldeRecupComplet } from '@/app/temps/actions'
 import type { JourneeEntry } from '@/app/temps/actions'
 
 // ─── Jours fériés France ──────────────────────────────────────────────────────
@@ -99,9 +99,10 @@ export type Props = {
   entriesInitiales: JourneeEntry[]
   moisInitial: number
   anneeInitiale: number
+  soldeRecupInitial: number
 }
 
-export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale }: Props) {
+export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial }: Props) {
   const [mois,        setMois]        = useState(moisInitial)
   const [annee,       setAnnee]       = useState(anneeInitiale)
   const [entries,     setEntries]     = useState<JourneeEntry[]>(entriesInitiales)
@@ -109,6 +110,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
   const [editState,   setEditState]   = useState<EditState | null>(null)
   const [saving,      setSaving]      = useState(false)
   const [saveMsg,     setSaveMsg]     = useState<string | null>(null)
+  const [soldeRecup,  setSoldeRecup]  = useState(soldeRecupInitial)
 
   const today = todayISO()
   const weeks = getWeeksOfMonth(annee, mois)
@@ -163,8 +165,11 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
       pointes_bateaux: editState.pointes.filter(p => p.nom.trim()).map(p => ({ nom_bateau: p.nom, panier_repas: p.panier })),
     })
     if (res.success) {
-      const data = await getFeuillesMois(employe.nom, employe.prenom, mois, annee)
-      setEntries(data); setSaveMsg('✅ Enregistré')
+      const [data, nouveauSolde] = await Promise.all([
+        getFeuillesMois(employe.nom, employe.prenom, mois, annee),
+        getSoldeRecupComplet(employe.nom, employe.prenom, employe.id),
+      ])
+      setEntries(data); setSoldeRecup(nouveauSolde); setSaveMsg('✅ Enregistré')
       setTimeout(() => setEditState(null), 700)
     } else {
       setSaveMsg(`⚠️ ${res.message}`)
@@ -347,25 +352,45 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
         </div>
       )}
 
-      {/* ── Récap compact ── */}
-      {entries.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-2xl p-4 border border-marine-100 text-center shadow-sm">
-            <p className="text-marine-500 text-xs uppercase tracking-wide mb-1">Jours saisis</p>
-            <p className="text-marine-800 text-2xl font-bold">{entries.length}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-marine-100 text-center shadow-sm">
-            <p className="text-marine-500 text-xs uppercase tracking-wide mb-1">Heures</p>
-            <p className="text-marine-800 text-2xl font-bold">{fmt(totalHeures)}h</p>
-          </div>
-          <div className={`rounded-2xl p-4 border text-center shadow-sm ${totalRecup >= 0 ? 'bg-success-100 border-success-600/20' : 'bg-danger-100 border-danger-600/20'}`}>
-            <p className="text-marine-500 text-xs uppercase tracking-wide mb-1">Solde récup.</p>
-            <p className={`text-2xl font-bold ${totalRecup >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
-              {totalRecup > 0 ? '+' : ''}{fmt(totalRecup)}h
-            </p>
-          </div>
+      {/* ── Récap : heures du mois + solde total historique ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Heures travaillées ce mois */}
+        <div className="bg-white rounded-2xl p-4 border border-marine-100 text-center shadow-sm">
+          <p className="text-marine-500 text-xs uppercase tracking-wide mb-1">
+            Heures — {MOIS_NOMS[mois - 1]}
+          </p>
+          <p className="text-marine-800 text-2xl font-bold">
+            {entries.length > 0 ? `${fmt(totalHeures)}h` : '—'}
+          </p>
         </div>
-      )}
+
+        {/* Solde récup total (historique) */}
+        <div className={`rounded-2xl p-5 border shadow-sm ${
+          soldeRecup > 0 ? 'bg-success-100 border-success-600/20' :
+          soldeRecup < 0 ? 'bg-danger-100  border-danger-600/20'  :
+                           'bg-marine-50   border-marine-200'
+        }`}>
+          <p className="text-marine-500 text-xs uppercase tracking-wide mb-1">
+            Solde récupération (total)
+          </p>
+          <p className={`text-2xl font-black mb-0.5 ${
+            soldeRecup > 0 ? 'text-success-600' :
+            soldeRecup < 0 ? 'text-danger-600'  : 'text-marine-400'
+          }`}>
+            {soldeRecup > 0 ? '+' : ''}{fmt(soldeRecup)}h
+          </p>
+          <p className={`text-xs font-medium ${
+            soldeRecup > 0 ? 'text-success-600' :
+            soldeRecup < 0 ? 'text-danger-600'  : 'text-marine-500'
+          }`}>
+            {soldeRecup > 0
+              ? "✅ L'entreprise vous doit ces heures"
+              : soldeRecup < 0
+              ? `⚠️ ${fmt(Math.abs(soldeRecup))}h à rattraper`
+              : '✅ Tout est à jour'}
+          </p>
+        </div>
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════
           MODAL SAISIE JOURNÉE

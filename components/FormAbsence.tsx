@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { calculerJoursOuvres, dateAujourdhui } from '@/lib/calcul-jours'
 import { soumettreAbsence } from '@/app/absence/actions'
 
 const TYPES_ABSENCE = ['Congés payés', 'Autre (précisez...)']
 
 export default function FormAbsence() {
+  const router = useRouter()
+
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
   const [typeAbsence, setTypeAbsence] = useState('Congés payés')
@@ -20,7 +23,8 @@ export default function FormAbsence() {
   const [dateAujourdhui_] = useState(dateAujourdhui())
 
   const [loading, setLoading] = useState(false)
-  const [resultat, setResultat] = useState<{ success: boolean; message: string } | null>(null)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false)
 
   // Calcul automatique des jours ouvrés
   useEffect(() => {
@@ -36,12 +40,12 @@ export default function FormAbsence() {
     e.preventDefault()
 
     if (!certifie) {
-      setResultat({ success: false, message: 'Vous devez certifier l\'exactitude des informations.' })
+      setErreur('Vous devez certifier l\'exactitude des informations.')
       return
     }
 
     setLoading(true)
-    setResultat(null)
+    setErreur(null)
 
     const res = await soumettreAbsence({
       nom,
@@ -55,37 +59,35 @@ export default function FormAbsence() {
     })
 
     setLoading(false)
-    setResultat(res)
 
     if (res.success) {
-      // Réinitialiser le formulaire
-      setNom('')
-      setPrenom('')
-      setTypeAbsence('Congés payés')
-      setTypeDetail('')
-      setDateDebut('')
-      setDateFin('')
-      setJoursOuvres(0)
-      setJoursManuel(false)
-      setCommentaire('')
-      setCertifie(false)
+      setShowSuccessPopup(true)
+      setTimeout(() => router.push('/'), 2500)
+    } else {
+      setErreur(res.message)
     }
   }
 
   return (
+    <>
+      {/* Popup succès */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-8 text-center max-w-sm w-full shadow-2xl">
+            <div className="text-6xl mb-4">✅</div>
+            <h2 className="text-marine-800 text-2xl font-bold mb-2">Demande envoyée !</h2>
+            <p className="text-marine-600 mb-4">Elle sera traitée par la direction.</p>
+            <p className="text-marine-400 text-sm">Retour à l&apos;accueil dans quelques secondes…</p>
+          </div>
+        </div>
+      )}
+
     <form onSubmit={handleSubmit} className="space-y-8">
 
-      {/* Message de résultat */}
-      {resultat && (
-        <div
-          className={`rounded-xl p-5 text-base font-medium ${
-            resultat.success
-              ? 'bg-success-100 text-success-600 border border-success-600/30'
-              : 'bg-danger-100 text-danger-600 border border-danger-600/30'
-          }`}
-        >
-          {resultat.success ? '✅ ' : '⚠️ '}
-          {resultat.message}
+      {/* Message d'erreur */}
+      {erreur && (
+        <div className="rounded-xl p-5 text-base font-medium bg-danger-100 text-danger-600 border border-danger-600/30">
+          ⚠️ {erreur}
         </div>
       )}
 
@@ -331,5 +333,6 @@ export default function FormAbsence() {
         )}
       </button>
     </form>
+    </>
   )
 }

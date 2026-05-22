@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux } from '@/app/admin/actions'
-import { updateAbsenceStatut, logoutAdmin } from '@/app/admin/actions'
+import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe } from '@/app/admin/actions'
+import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye } from '@/app/admin/actions'
 import { formatDateFR } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 
 type Props = {
   absences: AbsenceAvecStatut[]
   feuillesTemps: FeuilleTempsAvecBateaux[]
+  employes: Employe[]
   moisSelectionne: number
   anneeSelectionnee: number
   salarieSearch: string
@@ -28,13 +29,21 @@ const STATUT_CONFIG = {
 export default function AdminDashboard({
   absences,
   feuillesTemps,
+  employes,
   moisSelectionne,
   anneeSelectionnee,
   salarieSearch,
 }: Props) {
   const router = useRouter()
-  const [onglet, setOnglet] = useState<'absences' | 'temps'>('absences')
+  const [onglet, setOnglet] = useState<'absences' | 'temps' | 'employes'>('absences')
   const [isPending, startTransition] = useTransition()
+
+  // --- État gestion employés ---
+  const [empModal, setEmpModal] = useState<{ mode: 'create' | 'edit'; employe?: Employe } | null>(null)
+  const [empNom, setEmpNom] = useState('')
+  const [empPrenom, setEmpPrenom] = useState('')
+  const [empErreur, setEmpErreur] = useState('')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   // État local pour les filtres
   const [mois, setMois] = useState(moisSelectionne)
@@ -80,6 +89,48 @@ export default function AdminDashboard({
     await logoutAdmin()
     router.push('/admin')
     router.refresh()
+  }
+
+  // --- Fonctions gestion employés ---
+  function ouvrirCreationEmploye() {
+    setEmpNom('')
+    setEmpPrenom('')
+    setEmpErreur('')
+    setEmpModal({ mode: 'create' })
+  }
+
+  function ouvrirEditionEmploye(emp: Employe) {
+    setEmpNom(emp.nom)
+    setEmpPrenom(emp.prenom)
+    setEmpErreur('')
+    setEmpModal({ mode: 'edit', employe: emp })
+  }
+
+  async function sauvegarderEmploye() {
+    setEmpErreur('')
+    startTransition(async () => {
+      let res
+      if (empModal?.mode === 'create') {
+        res = await createEmploye(empNom, empPrenom)
+      } else if (empModal?.employe) {
+        res = await updateEmploye(empModal.employe.id, empNom, empPrenom)
+      } else return
+
+      if (res.success) {
+        setEmpModal(null)
+        router.refresh()
+      } else {
+        setEmpErreur(res.message)
+      }
+    })
+  }
+
+  async function confirmerSuppression(id: string) {
+    startTransition(async () => {
+      await deleteEmploye(id)
+      setDeleteConfirmId(null)
+      router.refresh()
+    })
   }
 
   // Calculs récap temps
@@ -170,7 +221,7 @@ export default function AdminDashboard({
         </div>
 
         {/* Onglets */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => setOnglet('absences')}
             className={`px-6 py-3 rounded-xl font-semibold text-base transition-colors ${
@@ -190,6 +241,16 @@ export default function AdminDashboard({
             }`}
           >
             ⏱️ Feuilles de temps ({feuillesTemps.length})
+          </button>
+          <button
+            onClick={() => setOnglet('employes')}
+            className={`px-6 py-3 rounded-xl font-semibold text-base transition-colors ${
+              onglet === 'employes'
+                ? 'bg-marine-800 text-white shadow-md'
+                : 'bg-white text-marine-700 hover:bg-marine-100 border border-marine-200'
+            }`}
+          >
+            👥 Employés ({employes.length})
           </button>
         </div>
 
@@ -358,6 +419,64 @@ export default function AdminDashboard({
             )}
           </div>
         )}
+
+        {/* ====== ONGLET EMPLOYÉS ====== */}
+        {onglet === 'employes' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-marine-600 text-sm">{employes.length} employé{employes.length > 1 ? 's' : ''}</p>
+              <button
+                onClick={ouvrirCreationEmploye}
+                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors shadow-sm"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Ajouter un employé
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-marine-100 overflow-hidden">
+              {employes.length === 0 ? (
+                <p className="p-10 text-center text-marine-400">Aucun employé enregistré.</p>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-marine-50 border-b border-marine-100">
+                    <tr>
+                      <th className="text-left px-5 py-3 text-marine-600 font-semibold text-sm">Nom</th>
+                      <th className="text-left px-5 py-3 text-marine-600 font-semibold text-sm">Prénom</th>
+                      <th className="px-5 py-3 text-right text-marine-600 font-semibold text-sm">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-marine-100">
+                    {employes.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-marine-50 transition-colors">
+                        <td className="px-5 py-4 text-marine-800 font-semibold">{emp.nom}</td>
+                        <td className="px-5 py-4 text-marine-700">{emp.prenom}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => ouvrirEditionEmploye(emp)}
+                              className="text-marine-600 hover:text-marine-800 hover:bg-marine-100 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              ✏️ Modifier
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(emp.id)}
+                              className="text-danger-600 hover:text-danger-700 hover:bg-danger-100 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              🗑️ Supprimer
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ====== MODAL DÉCISION ABSENCE ====== */}
@@ -427,6 +546,98 @@ export default function AdminDashboard({
                 className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold transition-colors"
               >
                 {isPending ? 'Sauvegarde...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== MODAL EMPLOYÉ (créer / modifier) ====== */}
+      {empModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-marine-800 text-xl font-bold mb-5">
+              {empModal.mode === 'create' ? '➕ Nouvel employé' : '✏️ Modifier l\'employé'}
+            </h3>
+
+            {empErreur && (
+              <div className="mb-4 p-3 bg-danger-100 text-danger-600 rounded-xl text-sm font-medium">
+                ⚠️ {empErreur}
+              </div>
+            )}
+
+            <div className="space-y-4 mb-5">
+              <div>
+                <label className="block text-marine-700 font-semibold mb-2">
+                  Nom <span className="text-danger-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={empNom}
+                  onChange={(e) => setEmpNom(e.target.value)}
+                  placeholder="Ex : DUPONT"
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-marine-700 font-semibold mb-2">
+                  Prénom <span className="text-danger-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={empPrenom}
+                  onChange={(e) => setEmpPrenom(e.target.value)}
+                  placeholder="Ex : Jean"
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEmpModal(null)}
+                className="flex-1 border-2 border-marine-200 text-marine-600 hover:bg-marine-50 py-3 rounded-xl font-medium transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={sauvegarderEmploye}
+                disabled={isPending || !empNom.trim() || !empPrenom.trim()}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold transition-colors"
+              >
+                {isPending ? 'Sauvegarde...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== MODAL CONFIRMATION SUPPRESSION ====== */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <h3 className="text-marine-800 text-xl font-bold mb-2">Supprimer cet employé ?</h3>
+            <p className="text-marine-500 text-sm mb-6">
+              {(() => {
+                const emp = employes.find(e => e.id === deleteConfirmId)
+                return emp ? `${emp.prenom} ${emp.nom}` : ''
+              })()}
+              <br />Cette action est irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 border-2 border-marine-200 text-marine-600 hover:bg-marine-50 py-3 rounded-xl font-medium transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => confirmerSuppression(deleteConfirmId)}
+                disabled={isPending}
+                className="flex-1 bg-danger-600 hover:bg-danger-700 disabled:opacity-60 text-white py-3 rounded-xl font-bold transition-colors"
+              >
+                {isPending ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
           </div>

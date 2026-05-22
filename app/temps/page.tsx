@@ -1,18 +1,20 @@
 import Header from '@/components/Header'
 import FormTemps from '@/components/FormTemps'
+import { getEmployes } from '@/app/admin/actions'
 
 export const metadata = {
   title: 'Feuille de temps — Atlantique Sellerie',
 }
 
-export default function TempsPage() {
+export default async function TempsPage() {
+  const employes = await getEmployes()
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header titre="Feuille de temps" />
 
       <main className="flex-1 py-8 px-4">
         <div className="max-w-2xl mx-auto">
-          {/* Titre */}
           <div className="mb-8 text-center">
             <h1 className="text-marine-800 text-3xl font-bold">
               ⏱️ Feuille de temps
@@ -22,7 +24,7 @@ export default function TempsPage() {
             </p>
           </div>
 
-          <FormTemps />
+          <FormTemps employes={employes} />
         </div>
       </main>
 

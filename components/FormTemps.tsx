@@ -4,19 +4,23 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { dateAujourdhui } from '@/lib/calcul-jours'
 import { soumettreFeuilleTemps } from '@/app/temps/actions'
+import type { Employe } from '@/lib/supabase'
 
 type LigneBateau = {
   id: number
   nom_bateau: string
-  numero: string  // chiffre de référence de la pointe
+  numero: string
 }
 
 let nextId = 1
 
-export default function FormTemps() {
+type Props = { employes: Employe[] }
+
+export default function FormTemps({ employes }: Props) {
   const router = useRouter()
   const aujourd = dateAujourdhui()
 
+  const [employeId, setEmployeId] = useState('')
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
   const [dateJournee, setDateJournee] = useState(aujourd)
@@ -74,6 +78,18 @@ export default function FormTemps() {
     }
   }
 
+  function handleSelectEmploye(id: string) {
+    setEmployeId(id)
+    const emp = employes.find((e) => e.id === id)
+    if (emp) {
+      setNom(emp.nom)
+      setPrenom(emp.prenom)
+    } else {
+      setNom('')
+      setPrenom('')
+    }
+  }
+
   return (
     <>
       {/* Popup succès */}
@@ -104,36 +120,25 @@ export default function FormTemps() {
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {/* Nom */}
-          <div>
-            <label htmlFor="nom" className="block text-marine-700 font-semibold mb-2">
-              Nom <span className="text-danger-600">*</span>
+          {/* Sélecteur employé */}
+          <div className="sm:col-span-2">
+            <label htmlFor="employe" className="block text-marine-700 font-semibold mb-2">
+              Votre nom <span className="text-danger-600">*</span>
             </label>
-            <input
-              id="nom"
-              type="text"
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
+            <select
+              id="employe"
+              value={employeId}
+              onChange={(e) => handleSelectEmploye(e.target.value)}
               required
-              placeholder="Ex : DUPONT"
-              className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
-            />
-          </div>
-
-          {/* Prénom */}
-          <div>
-            <label htmlFor="prenom" className="block text-marine-700 font-semibold mb-2">
-              Prénom <span className="text-danger-600">*</span>
-            </label>
-            <input
-              id="prenom"
-              type="text"
-              value={prenom}
-              onChange={(e) => setPrenom(e.target.value)}
-              required
-              placeholder="Ex : Jean"
-              className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
-            />
+              className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg bg-white focus:border-orange-500 focus:outline-none transition-colors"
+            >
+              <option value="">— Choisissez votre nom —</option>
+              {employes.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.prenom} {emp.nom}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Date */}

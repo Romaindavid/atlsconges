@@ -1,4 +1,4 @@
-import { isAdminAuthenticated, getAbsences, getFeuillesTemps } from './actions'
+import { isAdminAuthenticated, getAbsences, getFeuillesTemps, getEmployes } from './actions'
 import AdminDashboard from '@/components/AdminDashboard'
 import AdminLogin from '@/components/AdminLogin'
 
@@ -32,15 +32,17 @@ export default async function AdminPage({
   const annee = parseInt(params.annee ?? String(now.getFullYear()))
   const q = params.q ?? ''
 
-  const [absences, feuillesTemps] = await Promise.all([
+  const [absences, feuillesTemps, employes] = await Promise.all([
     getAbsences(mois, annee, q),
     getFeuillesTemps(mois, annee, q),
+    getEmployes(),
   ])
 
   return (
     <AdminDashboard
       absences={absences}
       feuillesTemps={feuillesTemps}
+      employes={employes}
       moisSelectionne={mois}
       anneeSelectionnee={annee}
       salarieSearch={q}

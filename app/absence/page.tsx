@@ -1,18 +1,20 @@
 import Header from '@/components/Header'
 import FormAbsence from '@/components/FormAbsence'
+import { getEmployes } from '@/app/admin/actions'
 
 export const metadata = {
   title: 'Demande d\'absence — Atlantique Sellerie',
 }
 
-export default function AbsencePage() {
+export default async function AbsencePage() {
+  const employes = await getEmployes()
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header titre="Demande d'absence" />
 
       <main className="flex-1 py-8 px-4">
         <div className="max-w-2xl mx-auto">
-          {/* Titre */}
           <div className="mb-8 text-center">
             <h1 className="text-marine-800 text-3xl font-bold">
               📅 Demande d&apos;absence
@@ -22,7 +24,7 @@ export default function AbsencePage() {
             </p>
           </div>
 
-          <FormAbsence />
+          <FormAbsence employes={employes} />
         </div>
       </main>
 

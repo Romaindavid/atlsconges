@@ -161,3 +161,71 @@ export async function getFeuillesTemps(
   }
   return data as FeuilleTempsAvecBateaux[]
 }
+
+// --- Employés ---
+
+export type Employe = {
+  id: string
+  nom: string
+  prenom: string
+  actif: boolean
+  created_at: string
+}
+
+export async function getEmployes(): Promise<Employe[]> {
+  const { data, error } = await getSupabase()
+    .from('employes')
+    .select('*')
+    .order('nom', { ascending: true })
+    .order('prenom', { ascending: true })
+
+  if (error) {
+    console.error('Erreur getEmployes:', error)
+    return []
+  }
+  return data as Employe[]
+}
+
+export async function createEmploye(
+  nom: string,
+  prenom: string
+): Promise<{ success: boolean; message: string }> {
+  if (!nom.trim() || !prenom.trim()) {
+    return { success: false, message: 'Nom et prénom sont obligatoires.' }
+  }
+  const { error } = await getSupabase()
+    .from('employes')
+    .insert({ nom: nom.trim().toUpperCase(), prenom: prenom.trim() })
+
+  if (error) return { success: false, message: 'Erreur lors de la création.' }
+  return { success: true, message: 'Employé ajouté.' }
+}
+
+export async function updateEmploye(
+  id: string,
+  nom: string,
+  prenom: string
+): Promise<{ success: boolean; message: string }> {
+  if (!nom.trim() || !prenom.trim()) {
+    return { success: false, message: 'Nom et prénom sont obligatoires.' }
+  }
+  const { error } = await getSupabase()
+    .from('employes')
+    .update({ nom: nom.trim().toUpperCase(), prenom: prenom.trim() })
+    .eq('id', id)
+
+  if (error) return { success: false, message: 'Erreur lors de la mise à jour.' }
+  return { success: true, message: 'Employé modifié.' }
+}
+
+export async function deleteEmploye(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  const { error } = await getSupabase()
+    .from('employes')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { success: false, message: 'Erreur lors de la suppression.' }
+  return { success: true, message: 'Employé supprimé.' }
+}

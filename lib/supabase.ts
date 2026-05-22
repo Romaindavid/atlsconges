@@ -51,3 +51,11 @@ export type PointeBateau = {
   nom_bateau: string
   heures: number
 }
+
+export type Employe = {
+  id: string
+  nom: string
+  prenom: string
+  actif: boolean
+  created_at: string
+}

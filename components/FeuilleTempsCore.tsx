@@ -85,7 +85,6 @@ const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','A
 type EditPointe = { uid: number; nom: string; panier: boolean }
 type EditState  = {
   date: string
-  heuresTravaillees: string
   heuresEnPlus: string   // positif → l'entreprise me doit
   heuresEnMoins: string  // positif → je dois rattraper
   commentaire: string
@@ -134,7 +133,6 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
     const r = e?.heures_a_recuperer ?? 0
     setEditState({
       date: iso,
-      heuresTravaillees: e?.heures_travaillees != null ? String(e.heures_travaillees) : defaultHours(iso),
       heuresEnPlus:  r > 0 ? String(r)           : '',
       heuresEnMoins: r < 0 ? String(Math.abs(r)) : '',
       commentaire: e?.commentaire ?? '',
@@ -154,10 +152,11 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
     setSaving(true); setSaveMsg(null)
     const enPlus  = parseFloat(editState.heuresEnPlus)  || 0
     const enMoins = parseFloat(editState.heuresEnMoins) || 0
+    const defaultH = parseFloat(defaultHours(editState.date)) || null
     const res = await sauvegarderJournee({
       nom: employe.nom, prenom: employe.prenom,
       date_journee: editState.date,
-      heures_travaillees: editState.heuresTravaillees ? parseFloat(editState.heuresTravaillees) : null,
+      heures_travaillees: defaultH,
       heures_a_recuperer: enPlus - enMoins,
       commentaire: editState.commentaire.trim() || null,
       pointes_bateaux: editState.pointes.filter(p => p.nom.trim()).map(p => ({ nom_bateau: p.nom, panier_repas: p.panier })),
@@ -247,6 +246,10 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       const isFutur  = iso > today
                       const entry    = byDate.get(iso)
                       const clickable = inMonth && !ferie && !isFutur
+                      const defH     = parseFloat(defaultHours(iso)) || 0
+                      const effectif = entry
+                        ? (entry.heures_travaillees ?? defH) + (entry.heures_a_recuperer ?? 0)
+                        : null
 
                       return (
                         <td key={iso}
@@ -263,15 +266,24 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                         >
                           {ferie ? (
                             <span className="text-xs text-slate-400 italic">férié</span>
-                          ) : inMonth && entry?.heures_travaillees != null ? (
+                          ) : inMonth && entry ? (
                             <div className="flex flex-col items-center justify-center h-full">
-                              <span className={`font-bold text-base ${isToday ? 'text-orange-600' : 'text-marine-800'}`}>
-                                {fmt(entry.heures_travaillees)}
+                              <span className={`font-bold text-base ${
+                                (entry.heures_a_recuperer ?? 0) !== 0
+                                  ? (entry.heures_a_recuperer! > 0 ? 'text-success-600' : 'text-danger-600')
+                                  : isToday ? 'text-orange-600' : 'text-marine-800'
+                              }`}>
+                                {fmt(effectif!)}
                               </span>
                               {entry.commentaire && (
                                 <span className="text-xs leading-none" title={entry.commentaire}>💬</span>
                               )}
                             </div>
+                          ) : inMonth && !isFutur && defH > 0 ? (
+                            /* Journée passée non saisie — affiche le défaut en gris */
+                            <span className={`text-sm italic select-none ${isSam ? 'text-slate-300' : 'text-marine-300'}`}>
+                              {fmt(defH)}
+                            </span>
                           ) : inMonth && !isFutur ? (
                             <span className="text-marine-200 text-lg select-none">·</span>
                           ) : null}
@@ -379,17 +391,18 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
             {/* Corps scrollable */}
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-              {/* ── Heures travaillées (pré-remplies) ── */}
-              <div>
-                <label className="block text-marine-700 font-bold mb-2">⏱️ Heures travaillées</label>
-                <div className="flex items-center gap-3">
-                  <input type="number" step="0.25" min="0" max="24"
-                    value={editState.heuresTravaillees}
-                    onChange={e => setEditState(p => p ? { ...p, heuresTravaillees: e.target.value } : p)}
-                    className="w-28 border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-xl text-center focus:border-orange-500 focus:outline-none transition-colors"
-                  />
-                  <span className="text-marine-600 font-semibold">heures</span>
+              {/* ── Heures travaillées (non éditable, standard) ── */}
+              <div className="flex items-center gap-3 bg-marine-50 rounded-xl px-4 py-3 border border-marine-200">
+                <span className="text-2xl">⏱️</span>
+                <div>
+                  <p className="text-marine-700 font-bold text-sm">Journée standard</p>
+                  <p className="text-marine-800 font-black text-xl">
+                    {defaultHours(editState.date) || '—'}&nbsp;h
+                  </p>
                 </div>
+                <p className="text-marine-400 text-xs ml-auto text-right">
+                  Pré-rempli<br/>automatiquement
+                </p>
               </div>
 
               {/* ── Récupération (2 champs séparés, libellés à la 1ère personne) ── */}

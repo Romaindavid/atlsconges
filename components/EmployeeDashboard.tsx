@@ -76,6 +76,10 @@ export default function EmployeeDashboard({ employee, absences, entriesInitiales
               moisInitial={moisInitial}
               anneeInitiale={anneeInitiale}
               soldeRecupInitial={soldeRecupInitial}
+              absencesAccordees={absences
+                .filter(a => a.statut === 'accorde')
+                .map(a => ({ date_debut: a.date_debut, date_fin: a.date_fin, type_absence: a.type_absence }))
+              }
             />
           </section>
 

@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers'
 import { getSupabase } from '@/lib/supabase'
+import { getJoursFeriesAnnee } from '@/lib/calcul-jours'
 
 const COOKIE_NAME = 'atls_admin_auth'
 const COOKIE_MAX_AGE = 60 * 60 * 8 // 8 heures
@@ -243,4 +244,52 @@ export async function deleteEmploye(
 
   if (error) return { success: false, message: 'Erreur lors de la suppression.' }
   return { success: true, message: 'Employé supprimé.' }
+}
+
+// ─── Jours Fériés ─────────────────────────────────────────────────────────────
+
+export type JourFerieEntry = {
+  date: string
+  nom: string
+  actif: boolean      // true = férié effectif, false = ouvré (override admin)
+  isOverride: boolean // true = modifié par l'admin par rapport au standard
+}
+
+export async function getJoursFeriesAvecOverrides(annee: number): Promise<JourFerieEntry[]> {
+  const standard = getJoursFeriesAnnee(annee)
+
+  const { data: overrides } = await getSupabase()
+    .from('jours_feries_override')
+    .select('date, actif')
+    .gte('date', `${annee}-01-01`)
+    .lte('date', `${annee}-12-31`)
+
+  type OverrideRow = { date: string; actif: boolean }
+  const ovMap = new Map((overrides as OverrideRow[] ?? []).map(o => [o.date, o.actif]))
+
+  const result: JourFerieEntry[] = standard.map(f => ({
+    date:       f.date,
+    nom:        f.nom,
+    actif:      ovMap.has(f.date) ? ovMap.get(f.date)! : true,
+    isOverride: ovMap.has(f.date),
+  }))
+
+  // Jours fériés exceptionnels ajoutés par l'admin (non-standard + actif=true)
+  ;(overrides as OverrideRow[] ?? []).forEach(o => {
+    if (o.actif && !standard.some(s => s.date === o.date)) {
+      result.push({ date: o.date, nom: 'Jour férié exceptionnel', actif: true, isOverride: true })
+    }
+  })
+
+  return result.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export async function setJourFerieOverride(
+  date: string,
+  actif: boolean
+): Promise<{ success: boolean }> {
+  const { error } = await getSupabase()
+    .from('jours_feries_override')
+    .upsert({ date, actif }, { onConflict: 'date' })
+  return { success: !error }
 }

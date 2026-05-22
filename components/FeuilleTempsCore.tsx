@@ -4,34 +4,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { getFeuillesMois, sauvegarderJournee, getSoldeRecupComplet } from '@/app/temps/actions'
 import type { JourneeEntry } from '@/app/temps/actions'
+import { isJourFerie } from '@/lib/calcul-jours'
 
-// ─── Jours fériés France ──────────────────────────────────────────────────────
-function getEaster(y: number): Date {
-  const a = y % 19, b = Math.floor(y / 100), c = y % 100
-  const d = Math.floor(b / 4), e = b % 4
-  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3)
-  const h = (19 * a + b - d - g + 15) % 30
-  const ii = Math.floor(c / 4), k = c % 4
-  const l = (32 + 2 * e + 2 * ii - h - k) % 7
-  const mm = Math.floor((a + 11 * h + 22 * l) / 451)
-  const month = Math.floor((h + l - 7 * mm + 114) / 31)
-  const day = ((h + l - 7 * mm + 114) % 31) + 1
-  return new Date(y, month - 1, day)
-}
-
-function isJourFerie(date: Date): boolean {
-  const m = date.getMonth() + 1, d = date.getDate(), y = date.getFullYear()
-  if (m === 1  && d === 1)  return true
-  if (m === 5  && d === 1)  return true
-  if (m === 5  && d === 8)  return true
-  if (m === 7  && d === 14) return true
-  if (m === 8  && d === 15) return true
-  if (m === 11 && d === 1)  return true
-  if (m === 11 && d === 11) return true
-  if (m === 12 && d === 25) return true
-  const em = getEaster(y).getTime()
-  const same = (ms: number) => { const x = new Date(ms); return x.getMonth() + 1 === m && x.getDate() === d }
-  return same(em + 86400000) || same(em + 39 * 86400000) || same(em + 50 * 86400000)
+// Emoji par type d'absence
+function absEmoji(type: string) {
+  if (type === 'Congés payés') return '🏝️'
+  if (type === 'Maladie') return '🤮'
+  return '😶'
 }
 
 // ─── Numéro de semaine ISO ────────────────────────────────────────────────────
@@ -94,15 +73,17 @@ let uidSeq = 1
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Employe = { id: string; nom: string; prenom: string }
+export type AbsenceAccordee = { date_debut: string; date_fin: string; type_absence: string }
 export type Props = {
   employe: Employe
   entriesInitiales: JourneeEntry[]
   moisInitial: number
   anneeInitiale: number
   soldeRecupInitial: number
+  absencesAccordees: AbsenceAccordee[]
 }
 
-export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial }: Props) {
+export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial, absencesAccordees }: Props) {
   const [mois,        setMois]        = useState(moisInitial)
   const [annee,       setAnnee]       = useState(anneeInitiale)
   const [entries,     setEntries]     = useState<JourneeEntry[]>(entriesInitiales)
@@ -251,30 +232,51 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       const isToday  = iso === today
                       const isFutur  = iso > today
                       const entry    = byDate.get(iso)
-                      const clickable = inMonth && !ferie && !isFutur
+                      const absence  = inMonth && !ferie
+                        ? absencesAccordees.find(a => a.date_debut <= iso && a.date_fin >= iso) ?? null
+                        : null
+                      const clickable = inMonth && !ferie && !isFutur && !absence
                       const defH     = parseFloat(defaultHours(iso)) || 0
                       const effectif = entry
                         ? (entry.heures_travaillees ?? defH) + (entry.heures_a_recuperer ?? 0)
                         : null
+                      const jourNum  = jour.getDate()
 
                       return (
                         <td key={iso}
                           onClick={clickable ? () => ouvrirEdit(iso) : undefined}
-                          style={{ height: '52px' }}
+                          style={{ height: '64px' }}
                           className={[
-                            'border-r border-marine-100 text-center align-middle relative px-1',
+                            'border-r border-marine-100 text-center align-top relative px-1 pt-1',
                             !inMonth              ? 'bg-slate-50/50' : '',
                             isSam && inMonth      ? 'bg-slate-100/60' : '',
                             isToday               ? '!bg-orange-50 border-l-2 !border-l-orange-400' : '',
                             ferie                 ? '!bg-slate-100' : '',
+                            absence               ? '!bg-marine-100/40' : '',
                             clickable             ? 'cursor-pointer hover:bg-orange-50/60 transition-colors' : '',
                           ].filter(Boolean).join(' ')}
                         >
-                          {ferie ? (
-                            <span className="text-xs text-slate-400 italic">férié</span>
+                          {/* Numéro du jour */}
+                          {inMonth && (
+                            <div className={`text-[10px] font-semibold leading-none mb-0.5 ${
+                              isToday ? 'text-orange-500' : ferie ? 'text-slate-400' : absence ? 'text-marine-400' : 'text-marine-300'
+                            }`}>
+                              {jourNum}
+                            </div>
+                          )}
+
+                          {/* Contenu */}
+                          {absence ? (
+                            <div className="flex items-center justify-center h-8">
+                              <span className="text-base" title={absence.type_absence}>{absEmoji(absence.type_absence)}</span>
+                            </div>
+                          ) : ferie ? (
+                            <div className="flex items-center justify-center h-8">
+                              <span className="text-[10px] text-slate-400 italic">férié</span>
+                            </div>
                           ) : inMonth && entry ? (
-                            <div className="flex flex-col items-center justify-center h-full">
-                              <span className={`font-bold text-base ${
+                            <div className="flex flex-col items-center justify-center h-8">
+                              <span className={`font-bold text-sm ${
                                 (entry.heures_a_recuperer ?? 0) !== 0
                                   ? (entry.heures_a_recuperer! > 0 ? 'text-success-600' : 'text-danger-600')
                                   : isToday ? 'text-orange-600' : 'text-marine-800'
@@ -286,14 +288,14 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                               )}
                             </div>
                           ) : inMonth && !isFutur && defH > 0 ? (
-                            /* Journée passée non saisie — affiche le défaut en gris */
-                            <span className={`text-sm italic select-none ${isSam ? 'text-slate-300' : 'text-marine-300'}`}>
-                              {fmt(defH)}
-                            </span>
-                          ) : inMonth && !isFutur ? (
-                            <span className="text-marine-200 text-lg select-none">·</span>
+                            <div className="flex items-center justify-center h-8">
+                              <span className={`text-xs italic select-none ${isSam ? 'text-slate-300' : 'text-marine-300'}`}>
+                                {fmt(defH)}
+                              </span>
+                            </div>
                           ) : null}
-                          {isToday && !ferie && (
+
+                          {isToday && !ferie && !absence && (
                             <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-orange-500" />
                           )}
                         </td>

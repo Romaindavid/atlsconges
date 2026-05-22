@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe } from '@/app/admin/actions'
-import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart } from '@/app/admin/actions'
-import { formatDateFR } from '@/lib/calcul-jours'
+import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride } from '@/app/admin/actions'
+import type { JourFerieEntry } from '@/app/admin/actions'
+import { isJourFerie, formatDateFR } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 
 // ─── Helpers calendrier / XLS ────────────────────────────────────────────────
@@ -26,6 +27,7 @@ type Props = {
   feuillesTemps: FeuilleTempsAvecBateaux[]
   feuillesTempsCalendrier: FeuilleTempsAvecBateaux[]
   employes: Employe[]
+  joursFeriesInitiaux: JourFerieEntry[]
   moisSelectionne: number
   anneeSelectionnee: number
   salarieSearch: string
@@ -48,12 +50,14 @@ export default function AdminDashboard({
   feuillesTemps,
   feuillesTempsCalendrier,
   employes,
+  joursFeriesInitiaux,
   moisSelectionne,
   anneeSelectionnee,
   salarieSearch,
 }: Props) {
   const router = useRouter()
-  const [onglet, setOnglet] = useState<'absences' | 'temps' | 'employes'>('absences')
+  const [onglet, setOnglet] = useState<'absences' | 'temps' | 'feries' | 'employes'>('absences')
+  const [joursFeries, setJoursFeries] = useState<JourFerieEntry[]>(joursFeriesInitiaux)
   const [isPending, startTransition] = useTransition()
 
   // --- État gestion employés ---
@@ -162,6 +166,13 @@ export default function AdminDashboard({
       setDeleteConfirmId(null)
       router.refresh()
     })
+  }
+
+  // ── Toggle jour férié ──────────────────────────────────────────────────────
+  async function toggleJourFerie(date: string, currentActif: boolean) {
+    const newActif = !currentActif
+    setJoursFeries(prev => prev.map(f => f.date === date ? { ...f, actif: newActif, isOverride: true } : f))
+    await setJourFerieOverride(date, newActif)
   }
 
   // ── Export XLS ──────────────────────────────────────────────────────────────
@@ -356,6 +367,16 @@ export default function AdminDashboard({
           >
             👥 Employés ({employes.length})
           </button>
+          <button
+            onClick={() => setOnglet('feries')}
+            className={`px-6 py-3 rounded-xl font-semibold text-base transition-colors ${
+              onglet === 'feries'
+                ? 'bg-marine-800 text-white shadow-md'
+                : 'bg-white text-marine-700 hover:bg-marine-100 border border-marine-200'
+            }`}
+          >
+            🗓️ Jours Fériés
+          </button>
         </div>
 
         {/* ====== ONGLET ABSENCES ====== */}
@@ -447,11 +468,18 @@ export default function AdminDashboard({
             {(() => {
               const nJours = daysInMonth(mois, annee)
               const jours  = Array.from({ length: nJours }, (_, i) => i + 1)
-              const joursLabel = jours.map(j => ({
-                j,
-                weekend: isWeekend(annee, mois, j),
-                dow: new Date(annee, mois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' }),
-              }))
+              const joursLabel = jours.map(j => {
+                const ds = isoDay(annee, mois, j)
+                const wd = isWeekend(annee, mois, j)
+                const ferieOverride = joursFeries.find(f => f.date === ds)
+                const ferie = ferieOverride ? ferieOverride.actif : (!wd && isJourFerie(new Date(annee, mois - 1, j)))
+                return {
+                  j, ds,
+                  weekend: wd,
+                  ferie,
+                  dow: new Date(annee, mois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' }),
+                }
+              })
               return (
                 <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">
                   <div className="flex items-center justify-between px-5 py-3 border-b border-marine-100 bg-marine-50 gap-3 flex-wrap">
@@ -471,10 +499,11 @@ export default function AdminDashboard({
                           <th className="sticky left-0 z-10 bg-marine-50 px-3 py-2 text-left text-marine-600 font-semibold min-w-36 border-r border-marine-100">
                             Salarié
                           </th>
-                          {joursLabel.map(({ j, weekend, dow }) => (
-                            <th key={j} className={`px-0 py-1 text-center w-7 ${weekend ? 'text-slate-400 bg-slate-50' : 'text-marine-600'}`}>
+                          {joursLabel.map(({ j, weekend, ferie, dow }) => (
+                            <th key={j} className={`px-0 py-1 text-center w-7 ${weekend || ferie ? 'text-slate-400 bg-slate-50' : 'text-marine-600'}`}>
                               <div className="text-[10px] font-normal">{dow}</div>
-                              <div className="font-bold">{j}</div>
+                              <div className={`font-bold ${ferie ? 'text-orange-400' : ''}`}>{j}</div>
+                              {ferie && <div className="text-[8px] text-orange-400">F</div>}
                             </th>
                           ))}
                         </tr>
@@ -485,15 +514,14 @@ export default function AdminDashboard({
                             <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-marine-800 whitespace-nowrap border-r border-marine-100">
                               {emp.prenom} {emp.nom}
                             </td>
-                            {joursLabel.map(({ j, weekend }) => {
-                              const ds = isoDay(annee, mois, j)
+                            {joursLabel.map(({ j, ds, weekend, ferie }) => {
                               const ab = absencesCalendrier.find(a =>
                                 a.nom === emp.nom && a.prenom === emp.prenom &&
                                 a.statut !== 'refuse' &&
                                 a.date_debut <= ds && a.date_fin >= ds
                               )
                               return (
-                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${weekend ? 'bg-slate-50/60' : ''}`}>
+                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${weekend || ferie ? 'bg-slate-50/60' : ''}`}>
                                   {ab ? (
                                     <div
                                       className={`w-full h-full flex items-center justify-center text-base leading-none ${ab.statut === 'en_attente' ? 'opacity-50' : ''}`}
@@ -501,7 +529,7 @@ export default function AdminDashboard({
                                     >
                                       {absEmoji(ab.type_absence)}
                                     </div>
-                                  ) : weekend ? (
+                                  ) : (weekend || ferie) ? (
                                     <div className="w-full h-full bg-slate-100/60 rounded" />
                                   ) : null}
                                 </td>
@@ -600,6 +628,45 @@ export default function AdminDashboard({
                     })}
                   </tbody>
                 </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ====== ONGLET JOURS FÉRIÉS ====== */}
+        {onglet === 'feries' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">
+              <div className="px-5 py-3 border-b border-marine-100 bg-marine-50 flex items-center justify-between">
+                <h3 className="text-marine-700 font-bold">Jours fériés — {annee}</h3>
+                <p className="text-marine-400 text-xs">Décochez les jours où l&apos;entreprise travaille</p>
+              </div>
+              {joursFeries.length === 0 ? (
+                <p className="p-8 text-center text-marine-400">Aucun jour férié pour {annee}.</p>
+              ) : (
+                <ul className="divide-y divide-marine-100">
+                  {joursFeries.map(f => (
+                    <li key={f.date} className="flex items-center justify-between px-5 py-3.5 hover:bg-marine-50/40">
+                      <div>
+                        <p className={`font-semibold text-sm ${f.actif ? 'text-marine-800' : 'text-marine-400 line-through'}`}>
+                          {f.nom}
+                        </p>
+                        <p className="text-marine-400 text-xs">
+                          {formatDateFR(f.date)}
+                          {f.isOverride && <span className="ml-2 text-orange-400 font-medium">modifié</span>}
+                        </p>
+                      </div>
+                      {/* Toggle switch */}
+                      <button
+                        onClick={() => toggleJourFerie(f.date, f.actif)}
+                        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${f.actif ? 'bg-marine-600' : 'bg-slate-300'}`}
+                        title={f.actif ? 'Cliquer pour marquer comme ouvré' : 'Cliquer pour marquer comme férié'}
+                      >
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${f.actif ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>

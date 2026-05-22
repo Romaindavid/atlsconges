@@ -14,15 +14,10 @@ function isoDay(a: number, m: number, d: number) {
 function isWeekend(a: number, m: number, d: number) {
   const dow = new Date(a, m - 1, d).getDay(); return dow === 0 || dow === 6
 }
-function absColor(type: string) {
-  if (type === 'Congés payés') return 'bg-marine-600 text-white'
-  if (type === 'Maladie')      return 'bg-warning-600 text-white'
-  return                              'bg-orange-500 text-white'
-}
-function absAbbr(type: string) {
-  if (type === 'Congés payés') return 'CP'
-  if (type === 'Maladie')      return 'M'
-  return 'A'
+function absEmoji(type: string) {
+  if (type === 'Congés payés') return '🏝️'
+  if (type === 'Maladie')      return '🤮'
+  return '😶'
 }
 
 type Props = {
@@ -247,14 +242,6 @@ export default function AdminDashboard({
     XLSX.writeFile(wb, `ATLS-Paie-${MOIS[mois - 1]}-${annee}.xlsx`)
   }
 
-  // Calculs récap temps
-  const totalHeuresTravaillees = feuillesTemps.reduce(
-    (acc, f) => acc + (f.heures_travaillees ?? 0), 0
-  )
-  const totalHeuresARecuperer = feuillesTemps.reduce(
-    (acc, f) => acc + (f.heures_a_recuperer ?? 0), 0
-  )
-
   const anneeOptions = []
   for (let y = anneeSelectionnee - 2; y <= anneeSelectionnee + 1; y++) {
     anneeOptions.push(y)
@@ -472,9 +459,9 @@ export default function AdminDashboard({
                       📅 Absences équipe — {MOIS[mois - 1]} {annee}
                     </h3>
                     <div className="flex items-center gap-3 text-xs text-marine-500">
-                      <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-marine-600"></span> CP</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-warning-600"></span> Maladie</span>
-                      <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-orange-500"></span> Autre</span>
+                      <span>🏝️ Congés payés</span>
+                      <span>🤮 Maladie</span>
+                      <span>😶 Autre</span>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -509,10 +496,10 @@ export default function AdminDashboard({
                                 <td key={j} className={`w-7 h-7 text-center p-0.5 ${weekend ? 'bg-slate-50/60' : ''}`}>
                                   {ab ? (
                                     <div
-                                      className={`w-full h-full flex items-center justify-center rounded text-[10px] font-bold ${absColor(ab.type_absence)} ${ab.statut === 'en_attente' ? 'opacity-60' : ''}`}
+                                      className={`w-full h-full flex items-center justify-center text-base leading-none ${ab.statut === 'en_attente' ? 'opacity-50' : ''}`}
                                       title={`${ab.type_absence}${ab.statut === 'en_attente' ? ' (en attente)' : ''}`}
                                     >
-                                      {absAbbr(ab.type_absence)}
+                                      {absEmoji(ab.type_absence)}
                                     </div>
                                   ) : weekend ? (
                                     <div className="w-full h-full bg-slate-100/60 rounded" />
@@ -542,85 +529,6 @@ export default function AdminDashboard({
               </button>
             </div>
 
-            {/* Récap global */}
-            {feuillesTemps.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
-                <div className="bg-white rounded-2xl p-4 border border-marine-100 text-center">
-                  <p className="text-marine-500 text-sm">Feuilles enregistrées</p>
-                  <p className="text-marine-800 text-3xl font-bold mt-1">{feuillesTemps.length}</p>
-                </div>
-                <div className="bg-white rounded-2xl p-4 border border-marine-100 text-center">
-                  <p className="text-marine-500 text-sm">Total heures travaillées</p>
-                  <p className="text-marine-800 text-3xl font-bold mt-1">{totalHeuresTravaillees.toFixed(2)}h</p>
-                </div>
-                <div className={`rounded-2xl p-4 border text-center ${totalHeuresARecuperer >= 0 ? 'bg-success-100 border-success-600/20' : 'bg-danger-100 border-danger-600/20'}`}>
-                  <p className="text-marine-500 text-sm">Heures à récupérer (total)</p>
-                  <p className={`text-3xl font-bold mt-1 ${totalHeuresARecuperer >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
-                    {totalHeuresARecuperer >= 0 ? '+' : ''}{totalHeuresARecuperer.toFixed(2)}h
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {feuillesTemps.length === 0 ? (
-              <div className="bg-white rounded-2xl p-10 text-center text-marine-400 border border-marine-100">
-                Aucune feuille de temps pour cette période.
-              </div>
-            ) : (
-              feuillesTemps.map((feuille) => (
-                <div
-                  key={feuille.id}
-                  className="bg-white rounded-2xl shadow-sm border border-marine-100 overflow-hidden"
-                >
-                  <div className="p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      {/* Info */}
-                      <div>
-                        <p className="text-marine-800 text-lg font-bold">
-                          {feuille.prenom} {feuille.nom}
-                        </p>
-                        <p className="text-marine-500 text-sm">
-                          {formatDateFR(feuille.date_journee)}
-                        </p>
-                      </div>
-
-                      {/* Heures */}
-                      <div className="flex gap-4 text-center">
-                        {feuille.heures_travaillees !== null && (
-                          <div>
-                            <p className="text-marine-500 text-xs">Travaillées</p>
-                            <p className="text-marine-800 text-xl font-bold">{feuille.heures_travaillees}h</p>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-marine-500 text-xs">À récupérer</p>
-                          <p className={`text-xl font-bold ${(feuille.heures_a_recuperer ?? 0) >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
-                            {(feuille.heures_a_recuperer ?? 0) >= 0 ? '+' : ''}{feuille.heures_a_recuperer ?? 0}h
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Pointés bateaux */}
-                    {feuille.pointes_bateaux && feuille.pointes_bateaux.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-marine-600 text-sm font-semibold mb-2">⛵ Bateaux :</p>
-                        <div className="flex flex-wrap gap-2">
-                          {feuille.pointes_bateaux.map((b) => (
-                            <span
-                              key={b.id}
-                              className="bg-marine-100 text-marine-700 px-3 py-1 rounded-lg text-sm font-medium"
-                            >
-                              {b.nom_bateau}{b.panier_repas && ' 🧺'}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
           </div>
         )}
 

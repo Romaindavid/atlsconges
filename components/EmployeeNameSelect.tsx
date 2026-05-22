@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { selectEmployee } from '@/app/actions'
 import type { Employe } from '@/lib/supabase'
-import Image from 'next/image'
-
 type Props = { employes: Employe[] }
 
 export default function EmployeeNameSelect({ employes }: Props) {
@@ -22,13 +20,10 @@ export default function EmployeeNameSelect({ employes }: Props) {
     <div className="min-h-screen bg-marine-50 flex flex-col">
       {/* Header */}
       <header className="bg-marine-800 py-5 px-4 text-center">
-        <Image
-          src="https://atlantiquesellerie.com/wp-content/uploads/2017/03/logo_horiz-white.png"
-          alt="Atlantique Sellerie"
-          width={220}
-          height={55}
-          className="h-12 w-auto mx-auto object-contain"
-          unoptimized
+        <img
+          src="/logo.png"
+          alt="ATLS"
+          className="h-14 w-14 mx-auto rounded-xl object-contain"
         />
       </header>
 

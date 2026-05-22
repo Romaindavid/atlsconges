@@ -2,6 +2,9 @@ import { isAdminAuthenticated, getAbsences, getFeuillesTemps } from './actions'
 import AdminDashboard from '@/components/AdminDashboard'
 import AdminLogin from '@/components/AdminLogin'
 
+// Toujours rendu côté serveur à la demande (cookies, données temps réel)
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   title: 'Interface Direction — Atlantique Sellerie',
 }

@@ -1,6 +1,6 @@
 'use server'
 
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export type AbsenceFormData = {
   nom: string
@@ -37,7 +37,7 @@ export async function soumettreAbsence(data: AbsenceFormData): Promise<ActionRes
     return { success: false, message: 'Veuillez préciser le type d\'absence.' }
   }
 
-  const { data: inserted, error } = await supabase
+  const { data: inserted, error } = await getSupabase()
     .from('absences')
     .insert({
       nom: data.nom.trim(),

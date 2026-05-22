@@ -1,6 +1,6 @@
 'use server'
 
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export type PointeBateauInput = {
   nom_bateau: string
@@ -32,6 +32,7 @@ export async function soumettreFeuilleTemps(data: FeuilleTempsFormData): Promise
   }
 
   // Insérer la feuille de temps
+  const supabase = getSupabase()
   const { data: feuille, error: feuilleError } = await supabase
     .from('feuilles_temps')
     .insert({

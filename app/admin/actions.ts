@@ -1,7 +1,7 @@
 'use server'
 
 import { cookies } from 'next/headers'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 const COOKIE_NAME = 'atls_admin_auth'
 const COOKIE_MAX_AGE = 60 * 60 * 8 // 8 heures
@@ -63,7 +63,7 @@ export async function getAbsences(
   annee?: number,
   salarieSearch?: string
 ): Promise<AbsenceAvecStatut[]> {
-  let query = supabase
+  let query = getSupabase()
     .from('absences')
     .select('*')
     .order('date_demande', { ascending: false })
@@ -96,7 +96,7 @@ export async function updateAbsenceStatut(
   statut: 'accorde' | 'refuse' | 'en_attente',
   commentaire_direction: string
 ): Promise<{ success: boolean; message: string }> {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('absences')
     .update({
       statut,
@@ -134,7 +134,7 @@ export async function getFeuillesTemps(
   annee?: number,
   salarieSearch?: string
 ): Promise<FeuilleTempsAvecBateaux[]> {
-  let query = supabase
+  let query = getSupabase()
     .from('feuilles_temps')
     .select('*, pointes_bateaux(*)')
     .order('date_journee', { ascending: false })

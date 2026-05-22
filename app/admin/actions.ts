@@ -126,6 +126,7 @@ export type FeuilleTempsAvecBateaux = {
     id: string
     nom_bateau: string
     heures: number
+    panier_repas: boolean
   }[]
 }
 

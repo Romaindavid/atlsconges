@@ -13,6 +13,7 @@ export type JourneeData = {
   date_journee: string
   heures_travaillees: number | null
   heures_a_recuperer: number
+  commentaire: string | null
   pointes_bateaux: PointeBateauInput[]
 }
 
@@ -21,6 +22,7 @@ export type JourneeEntry = {
   date_journee: string
   heures_travaillees: number | null
   heures_a_recuperer: number
+  commentaire: string | null
   pointes_bateaux: {
     id: string
     nom_bateau: string
@@ -40,7 +42,7 @@ export async function getFeuillesMois(
 
   const { data, error } = await getSupabase()
     .from('feuilles_temps')
-    .select('id, date_journee, heures_travaillees, heures_a_recuperer, pointes_bateaux(id, nom_bateau, panier_repas)')
+    .select('id, date_journee, heures_travaillees, heures_a_recuperer, commentaire, pointes_bateaux(id, nom_bateau, panier_repas)')
     .eq('nom', nom)
     .eq('prenom', prenom)
     .gte('date_journee', dateDebut)
@@ -66,7 +68,6 @@ export async function sauvegarderJournee(
 
   const supabase = getSupabase()
 
-  // Chercher si une entrée existe déjà pour ce jour
   const { data: existing } = await supabase
     .from('feuilles_temps')
     .select('id')
@@ -78,13 +79,13 @@ export async function sauvegarderJournee(
   let feuilleId: string
 
   if (existing) {
-    // Mise à jour
     feuilleId = existing.id
     const { error } = await supabase
       .from('feuilles_temps')
       .update({
         heures_travaillees: data.heures_travaillees,
         heures_a_recuperer: data.heures_a_recuperer,
+        commentaire: data.commentaire || null,
       })
       .eq('id', feuilleId)
 
@@ -92,10 +93,8 @@ export async function sauvegarderJournee(
       console.error('Erreur update feuille:', error)
       return { success: false, message: 'Erreur lors de la mise à jour.' }
     }
-    // Supprimer les anciennes pointes pour les recréer
     await supabase.from('pointes_bateaux').delete().eq('feuille_temps_id', feuilleId)
   } else {
-    // Création
     const { data: newFeuille, error } = await supabase
       .from('feuilles_temps')
       .insert({
@@ -104,6 +103,7 @@ export async function sauvegarderJournee(
         date_journee: data.date_journee,
         heures_travaillees: data.heures_travaillees,
         heures_a_recuperer: data.heures_a_recuperer,
+        commentaire: data.commentaire || null,
       })
       .select('id')
       .single()
@@ -115,14 +115,13 @@ export async function sauvegarderJournee(
     feuilleId = newFeuille.id
   }
 
-  // Insérer les nouvelles pointes
   const pointes = data.pointes_bateaux.filter((p) => p.nom_bateau.trim())
   if (pointes.length > 0) {
     await supabase.from('pointes_bateaux').insert(
       pointes.map((p) => ({
         feuille_temps_id: feuilleId,
         nom_bateau: p.nom_bateau.trim(),
-        heures: 1, // conservé pour la compatibilité schéma
+        heures: 1,
         panier_repas: p.panier_repas,
       }))
     )

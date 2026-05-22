@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  /* Palette principale */
-  --color-marine-900: #0a1f33;
-  --color-marine-800: #0f2d4a;
-  --color-marine-700: #163d64;
-  --color-marine-600: #1d4d7e;
-  --color-marine-500: #245e98;
-  --color-marine-100: #e8f0f9;
-  --color-marine-50: #f0f5fb;
+  /* Palette principale — identité visuelle ATLS (teal marine) */
+  --color-marine-900: #082C3F;
+  --color-marine-800: #0E4F6E;   /* couleur principale du logo */
+  --color-marine-700: #145E84;
+  --color-marine-600: #1A6D9A;
+  --color-marine-500: #2080B2;
+  --color-marine-200: #A8D5E8;
+  --color-marine-100: #D5EDF5;
+  --color-marine-50:  #EAF5FB;
 
   --color-orange-600: #ea6c00;
   --color-orange-500: #f97316;
@@ -30,8 +31,8 @@
 
 /* Base */
 :root {
-  --background: #f0f5fb;
-  --foreground: #0a1f33;
+  --background: #EAF5FB;
+  --foreground: #082C3F;
 }
 
 body {

@@ -26,24 +26,28 @@ export default function EmployeePasswordForm() {
   }
 
   return (
-    <div className="min-h-screen bg-marine-800 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-marine-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+
+        {/* Logo carré centré */}
+        <div className="flex justify-center mb-8">
           <Image
-            src="https://atlantiquesellerie.com/wp-content/uploads/2017/03/logo_horiz-white.png"
+            src="/logo.png"
             alt="Atlantique Sellerie"
-            width={240}
-            height={60}
-            className="h-14 w-auto mx-auto object-contain"
-            unoptimized
+            width={150}
+            height={150}
+            className="rounded-2xl shadow-2xl"
             priority
           />
-          <p className="text-marine-200 mt-3 text-base">
-            Gestion des congés et feuilles de temps
-          </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        {/* Sous-titre */}
+        <p className="text-marine-600 text-center text-base font-medium mb-6">
+          Gestion des congés &amp; feuilles de temps
+        </p>
+
+        {/* Carte formulaire */}
+        <div className="bg-white rounded-2xl shadow-xl border border-marine-100 p-8">
           <h1 className="text-marine-800 text-2xl font-bold text-center mb-6">
             Accès à l&apos;outil
           </h1>
@@ -83,7 +87,7 @@ export default function EmployeePasswordForm() {
 
         <p className="text-marine-500 text-xs text-center mt-6">
           Accès direction →{' '}
-          <a href="/admin" className="underline hover:text-marine-300">
+          <a href="/admin" className="underline hover:text-marine-700">
             /admin
           </a>
         </p>

@@ -47,21 +47,26 @@ export default function EmployeeDashboard({ employee, absences }: Props) {
   return (
     <div className="min-h-screen flex flex-col bg-marine-50">
       {/* Header */}
-      <header className="bg-marine-800 py-4 px-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
+      <header className="bg-marine-800 py-3 px-4 shadow-lg">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+          {/* Logo */}
           <Image
-            src="https://atlantiquesellerie.com/wp-content/uploads/2017/03/logo_horiz-white.png"
+            src="/logo.png"
             alt="Atlantique Sellerie"
-            width={180}
-            height={45}
-            className="h-10 w-auto object-contain"
-            unoptimized
+            width={44}
+            height={44}
+            className="rounded-lg flex-shrink-0"
           />
+
+          {/* Bouton Changer — bien visible pour ordi partagé */}
           <button
             onClick={handleChange}
-            className="text-marine-200 hover:text-white text-sm border border-marine-600 hover:border-marine-400 px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-md text-base"
           >
-            Changer →
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 3M21 7.5H7.5" />
+            </svg>
+            Changer de salarié
           </button>
         </div>
       </header>
@@ -116,7 +121,7 @@ export default function EmployeeDashboard({ employee, absences }: Props) {
 
             {absences.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center border border-marine-100 shadow-sm">
-                <p className="text-marine-400 text-lg">Aucune demande pour le moment.</p>
+                <p className="text-marine-500 text-lg">Aucune demande pour le moment.</p>
                 <Link
                   href="/absence"
                   className="inline-block mt-4 text-orange-500 hover:text-orange-600 font-semibold underline underline-offset-2"
@@ -144,11 +149,11 @@ export default function EmployeeDashboard({ employee, absences }: Props) {
                           </p>
                           <p className="text-marine-600 text-sm mt-0.5">
                             Du {formatDateFR(abs.date_debut)} au {formatDateFR(abs.date_fin)}
-                            <span className="text-marine-400 ml-2">
+                            <span className="text-marine-500 ml-2">
                               ({abs.jours_ouvres} j. ouvré{abs.jours_ouvres > 1 ? 's' : ''})
                             </span>
                           </p>
-                          <p className="text-marine-400 text-xs mt-0.5">
+                          <p className="text-marine-500 text-xs mt-0.5">
                             Demandé le {formatDateFR(abs.date_demande.split('T')[0])}
                           </p>
                         </div>
@@ -161,7 +166,7 @@ export default function EmployeeDashboard({ employee, absences }: Props) {
 
                       {/* Note direction */}
                       {abs.commentaire_direction && (
-                        <div className="mt-3 p-3 bg-marine-50 rounded-lg text-sm text-marine-600">
+                        <div className="mt-3 p-3 bg-marine-50 rounded-lg text-sm text-marine-700">
                           <span className="font-semibold">Note de la direction : </span>
                           {abs.commentaire_direction}
                         </div>

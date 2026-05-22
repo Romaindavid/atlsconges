@@ -149,11 +149,14 @@ export default function AdminDashboard({
   return (
     <div className="min-h-screen bg-marine-50">
       {/* Header admin */}
-      <header className="bg-marine-800 px-4 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-white text-xl font-bold">🔒 Interface Direction</h1>
-            <p className="text-marine-200 text-sm">Atlantique Sellerie</p>
+      <header className="bg-marine-800 px-4 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="ATLS" className="h-10 w-10 rounded-lg flex-shrink-0" />
+            <div>
+              <h1 className="text-white text-xl font-bold">🔒 Interface Direction</h1>
+              <p className="text-marine-200 text-sm">Atlantique Sellerie</p>
+            </div>
           </div>
           <button
             onClick={handleLogout}

@@ -1,13 +1,15 @@
+import { redirect } from 'next/navigation'
 import Header from '@/components/Header'
 import FormTemps from '@/components/FormTemps'
-import { getEmployes } from '@/app/admin/actions'
+import { getEmployeeSession } from '@/app/actions'
 
 export const metadata = {
   title: 'Feuille de temps — Atlantique Sellerie',
 }
 
 export default async function TempsPage() {
-  const employes = await getEmployes()
+  const employee = await getEmployeeSession()
+  if (!employee) redirect('/')
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -24,7 +26,7 @@ export default async function TempsPage() {
             </p>
           </div>
 
-          <FormTemps employes={employes} />
+          <FormTemps employe={employee} />
         </div>
       </main>
 

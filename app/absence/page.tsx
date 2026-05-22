@@ -1,13 +1,15 @@
+import { redirect } from 'next/navigation'
 import Header from '@/components/Header'
 import FormAbsence from '@/components/FormAbsence'
-import { getEmployes } from '@/app/admin/actions'
+import { getEmployeeSession } from '@/app/actions'
 
 export const metadata = {
   title: 'Demande d\'absence — Atlantique Sellerie',
 }
 
 export default async function AbsencePage() {
-  const employes = await getEmployes()
+  const employee = await getEmployeeSession()
+  if (!employee) redirect('/')
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -24,7 +26,7 @@ export default async function AbsencePage() {
             </p>
           </div>
 
-          <FormAbsence employes={employes} />
+          <FormAbsence employe={employee} />
         </div>
       </main>
 

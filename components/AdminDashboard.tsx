@@ -407,7 +407,7 @@ export default function AdminDashboard({
                               key={b.id}
                               className="bg-marine-100 text-marine-700 px-3 py-1 rounded-lg text-sm font-medium"
                             >
-                              {b.nom_bateau} — {b.heures}h
+                              {b.nom_bateau}
                             </span>
                           ))}
                         </div>

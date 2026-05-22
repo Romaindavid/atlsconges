@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { calculerJoursOuvres, dateAujourdhui } from '@/lib/calcul-jours'
 import { soumettreAbsence } from '@/app/absence/actions'
 
-const TYPES_ABSENCE = ['Congés payés', 'Autre (précisez...)']
+const TYPES_ABSENCE = ['Congés payés', 'Maladie', 'Autre (précisez...)']
 
 type Employe = { id: string; nom: string; prenom: string }
 type Props = { employe: Employe }

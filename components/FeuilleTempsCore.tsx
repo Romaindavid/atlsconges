@@ -114,7 +114,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
   const weeks = getWeeksOfMonth(annee, mois)
   const byDate = new Map(entries.map(e => [e.date_journee, e]))
 
-  const totalHeures  = entries.reduce((s, e) => s + (e.heures_travaillees ?? 0), 0)
+  const totalHeures  = entries.reduce((s, e) => s + (e.heures_travaillees ?? 0) + (e.heures_a_recuperer ?? 0), 0)
   const totalRecup   = entries.reduce((s, e) => s + (e.heures_a_recuperer  ?? 0), 0)
   const totalPointes = entries.reduce((s, e) => s + (e.pointes_bateaux?.length ?? 0), 0)
 
@@ -150,8 +150,9 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
   async function handleSave() {
     if (!editState) return
     setSaving(true); setSaveMsg(null)
-    const enPlus  = parseFloat(editState.heuresEnPlus)  || 0
-    const enMoins = parseFloat(editState.heuresEnMoins) || 0
+    const parseFR = (v: string) => parseFloat(v.replace(',', '.')) || 0
+    const enPlus  = parseFR(editState.heuresEnPlus)
+    const enMoins = parseFR(editState.heuresEnMoins)
     const defaultH = parseFloat(defaultHours(editState.date)) || null
     const res = await sauvegarderJournee({
       nom: employe.nom, prenom: employe.prenom,
@@ -227,7 +228,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
               {weeks.map((week, wi) => {
                 const inMonthDays = week.days.filter(d => d.getMonth() + 1 === mois)
                 const weekEntries = inMonthDays.map(d => byDate.get(dateToISO(d))).filter(Boolean) as JourneeEntry[]
-                const weekHeures  = weekEntries.reduce((s, e) => s + (e.heures_travaillees ?? 0), 0)
+                const weekHeures  = weekEntries.reduce((s, e) => s + (e.heures_travaillees ?? 0) + (e.heures_a_recuperer ?? 0), 0)
                 const weekRecup   = weekEntries.reduce((s, e) => s + (e.heures_a_recuperer  ?? 0), 0)
                 const weekPointes = weekEntries.flatMap(e => e.pointes_bateaux ?? [])
 
@@ -419,11 +420,11 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       ex : je pars 30 min plus tard
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <input type="number" step="0.25" min="0"
+                      <input type="text" inputMode="decimal"
                         value={editState.heuresEnPlus}
                         onChange={e => setEditState(p => p ? { ...p, heuresEnPlus: e.target.value } : p)}
                         placeholder="0"
-                        className="w-20 border-2 border-success-600/40 rounded-lg px-3 py-2.5 text-marine-900 text-lg text-center focus:border-success-600 focus:outline-none bg-white"
+                        className="w-28 border-2 border-success-600/40 rounded-lg px-3 py-2.5 text-marine-900 text-lg text-center focus:border-success-600 focus:outline-none bg-white"
                       />
                       <span className="text-success-600 text-sm font-medium">h → ce que l&apos;entreprise me doit</span>
                     </div>
@@ -438,11 +439,11 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       ex : je suis parti 30 min plus tôt
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <input type="number" step="0.25" min="0"
+                      <input type="text" inputMode="decimal"
                         value={editState.heuresEnMoins}
                         onChange={e => setEditState(p => p ? { ...p, heuresEnMoins: e.target.value } : p)}
                         placeholder="0"
-                        className="w-20 border-2 border-danger-600/40 rounded-lg px-3 py-2.5 text-marine-900 text-lg text-center focus:border-danger-600 focus:outline-none bg-white"
+                        className="w-28 border-2 border-danger-600/40 rounded-lg px-3 py-2.5 text-marine-900 text-lg text-center focus:border-danger-600 focus:outline-none bg-white"
                       />
                       <span className="text-danger-600 text-sm font-medium">h → ce que je dois rattraper</span>
                     </div>

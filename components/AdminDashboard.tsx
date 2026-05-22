@@ -6,9 +6,30 @@ import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteE
 import { formatDateFR } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 
+// ─── Helpers calendrier / XLS ────────────────────────────────────────────────
+function daysInMonth(m: number, a: number) { return new Date(a, m, 0).getDate() }
+function isoDay(a: number, m: number, d: number) {
+  return `${a}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+}
+function isWeekend(a: number, m: number, d: number) {
+  const dow = new Date(a, m - 1, d).getDay(); return dow === 0 || dow === 6
+}
+function absColor(type: string) {
+  if (type === 'Congés payés') return 'bg-marine-600 text-white'
+  if (type === 'Maladie')      return 'bg-warning-600 text-white'
+  return                              'bg-orange-500 text-white'
+}
+function absAbbr(type: string) {
+  if (type === 'Congés payés') return 'CP'
+  if (type === 'Maladie')      return 'M'
+  return 'A'
+}
+
 type Props = {
   absences: AbsenceAvecStatut[]
+  absencesCalendrier: AbsenceAvecStatut[]
   feuillesTemps: FeuilleTempsAvecBateaux[]
+  feuillesTempsCalendrier: FeuilleTempsAvecBateaux[]
   employes: Employe[]
   moisSelectionne: number
   anneeSelectionnee: number
@@ -28,7 +49,9 @@ const STATUT_CONFIG = {
 
 export default function AdminDashboard({
   absences,
+  absencesCalendrier,
   feuillesTemps,
+  feuillesTempsCalendrier,
   employes,
   moisSelectionne,
   anneeSelectionnee,
@@ -131,6 +154,84 @@ export default function AdminDashboard({
       setDeleteConfirmId(null)
       router.refresh()
     })
+  }
+
+  // ── Export XLS ──────────────────────────────────────────────────────────────
+  async function exporterXLS() {
+    const XLSX = await import('xlsx')
+
+    // Grouper feuilles et absences par employé (données non filtrées)
+    type FTMap = Map<string, FeuilleTempsAvecBateaux[]>
+    const byEmp: FTMap = new Map()
+    feuillesTempsCalendrier.forEach(f => {
+      const k = `${f.nom}||${f.prenom}`
+      if (!byEmp.has(k)) byEmp.set(k, [])
+      byEmp.get(k)!.push(f)
+    })
+    type AMap = Map<string, AbsenceAvecStatut[]>
+    const absEmpMap: AMap = new Map()
+    absencesCalendrier.forEach(a => {
+      const k = `${a.nom}||${a.prenom}`
+      if (!absEmpMap.has(k)) absEmpMap.set(k, [])
+      absEmpMap.get(k)!.push(a)
+    })
+
+    const fmtDate = (iso: string) => {
+      if (!iso) return ''
+      const [a, m, d] = iso.split('-')
+      return `${d}/${m}/${a}`
+    }
+    const fmtPeriode = (abs: AbsenceAvecStatut[]) =>
+      abs.map(a => `${fmtDate(a.date_debut)}→${fmtDate(a.date_fin)}`).join('; ')
+
+    const rows = employes.map(emp => {
+      const k = `${emp.nom}||${emp.prenom}`
+      const feuilles = byEmp.get(k) || []
+      const absEmp   = absEmpMap.get(k) || []
+
+      const pointes = feuilles.reduce((s, f) => s + (f.pointes_bateaux?.length ?? 0), 0)
+      const paniers = feuilles.reduce((s, f) =>
+        s + (f.pointes_bateaux?.filter(b => b.panier_repas).length ?? 0), 0)
+
+      const cp      = absEmp.filter(a => a.type_absence === 'Congés payés')
+      const maladie = absEmp.filter(a => a.type_absence === 'Maladie')
+      const autres  = absEmp.filter(a => a.type_absence !== 'Congés payés' && a.type_absence !== 'Maladie')
+
+      const commentaires: string[] = []
+      feuilles.filter(f => f.commentaire).forEach(f =>
+        commentaires.push(`${fmtDate(f.date_journee)}: ${f.commentaire}`)
+      )
+      absEmp.forEach(a => {
+        if (a.commentaire_salarie)
+          commentaires.push(`[${a.type_absence} ${fmtDate(a.date_debut)}→${fmtDate(a.date_fin)}] ${a.commentaire_salarie}`)
+      })
+
+      return {
+        'NOM':            emp.nom,
+        'PRENOM':         emp.prenom,
+        'NBRE HEURES':    151.67,
+        'TH':             '',
+        'H SUP 25':       '',
+        'H SUP 50':       '',
+        'POINTES AVANT':  pointes || '',
+        'PRIMES DIV':     '',
+        'REMB TEL':       2,
+        'PANIERS':        paniers || '',
+        'ACOMPTE':        '',
+        'CP (nb j.)':     cp.reduce((s, a) => s + a.jours_ouvres, 0) || '',
+        'CP (dates)':     fmtPeriode(cp),
+        'MALADIE (nb j.)': maladie.reduce((s, a) => s + a.jours_ouvres, 0) || '',
+        'MALADIE (dates)': fmtPeriode(maladie),
+        'AUTRES (nb j.)': autres.reduce((s, a) => s + a.jours_ouvres, 0) || '',
+        'AUTRES (dates)': fmtPeriode(autres),
+        'COMMENTAIRES':   commentaires.join(' | '),
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, `Paie ${MOIS[mois - 1]} ${annee}`)
+    XLSX.writeFile(wb, `ATLS-Paie-${MOIS[mois - 1]}-${annee}.xlsx`)
   }
 
   // Calculs récap temps
@@ -341,6 +442,93 @@ export default function AdminDashboard({
         {/* ====== ONGLET FEUILLES DE TEMPS ====== */}
         {onglet === 'temps' && (
           <div className="space-y-4">
+
+            {/* ── Calendrier absences équipe ── */}
+            {(() => {
+              const nJours = daysInMonth(mois, annee)
+              const jours  = Array.from({ length: nJours }, (_, i) => i + 1)
+              const joursLabel = jours.map(j => ({
+                j,
+                weekend: isWeekend(annee, mois, j),
+                dow: new Date(annee, mois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' }),
+              }))
+              return (
+                <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-marine-100 bg-marine-50 gap-3 flex-wrap">
+                    <h3 className="text-marine-700 font-bold text-sm">
+                      📅 Absences équipe — {MOIS[mois - 1]} {annee}
+                    </h3>
+                    <div className="flex items-center gap-3 text-xs text-marine-500">
+                      <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-marine-600"></span> CP</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-warning-600"></span> Maladie</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-orange-500"></span> Autre</span>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="text-xs border-collapse w-full">
+                      <thead>
+                        <tr>
+                          <th className="sticky left-0 z-10 bg-marine-50 px-3 py-2 text-left text-marine-600 font-semibold min-w-36 border-r border-marine-100">
+                            Salarié
+                          </th>
+                          {joursLabel.map(({ j, weekend, dow }) => (
+                            <th key={j} className={`px-0 py-1 text-center w-7 ${weekend ? 'text-slate-400 bg-slate-50' : 'text-marine-600'}`}>
+                              <div className="text-[10px] font-normal">{dow}</div>
+                              <div className="font-bold">{j}</div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employes.map(emp => (
+                          <tr key={emp.id} className="border-t border-marine-100 hover:bg-marine-50/30">
+                            <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-marine-800 whitespace-nowrap border-r border-marine-100">
+                              {emp.prenom} {emp.nom}
+                            </td>
+                            {joursLabel.map(({ j, weekend }) => {
+                              const ds = isoDay(annee, mois, j)
+                              const ab = absencesCalendrier.find(a =>
+                                a.nom === emp.nom && a.prenom === emp.prenom &&
+                                a.statut !== 'refuse' &&
+                                a.date_debut <= ds && a.date_fin >= ds
+                              )
+                              return (
+                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${weekend ? 'bg-slate-50/60' : ''}`}>
+                                  {ab ? (
+                                    <div
+                                      className={`w-full h-full flex items-center justify-center rounded text-[10px] font-bold ${absColor(ab.type_absence)} ${ab.statut === 'en_attente' ? 'opacity-60' : ''}`}
+                                      title={`${ab.type_absence}${ab.statut === 'en_attente' ? ' (en attente)' : ''}`}
+                                    >
+                                      {absAbbr(ab.type_absence)}
+                                    </div>
+                                  ) : weekend ? (
+                                    <div className="w-full h-full bg-slate-100/60 rounded" />
+                                  ) : null}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ── Bouton export XLS + récap ── */}
+            <div className="flex justify-end">
+              <button
+                onClick={exporterXLS}
+                className="flex items-center gap-2 bg-success-600 hover:bg-success-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exporter XLS — {MOIS[mois - 1]} {annee}
+              </button>
+            </div>
+
             {/* Récap global */}
             {feuillesTemps.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">

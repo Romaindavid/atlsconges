@@ -121,6 +121,7 @@ export type FeuilleTempsAvecBateaux = {
   date_journee: string
   heures_travaillees: number | null
   heures_a_recuperer: number
+  commentaire: string | null
   created_at: string
   pointes_bateaux: {
     id: string

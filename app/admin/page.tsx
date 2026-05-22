@@ -32,16 +32,20 @@ export default async function AdminPage({
   const annee = parseInt(params.annee ?? String(now.getFullYear()))
   const q = params.q ?? ''
 
-  const [absences, feuillesTemps, employes] = await Promise.all([
+  const [absences, absencesCalendrier, feuillesTemps, feuillesTempsCalendrier, employes] = await Promise.all([
     getAbsences(mois, annee, q),
+    getAbsences(mois, annee),          // toutes les absences du mois (calendrier)
     getFeuillesTemps(mois, annee, q),
+    getFeuillesTemps(mois, annee),     // toutes les feuilles du mois (export XLS)
     getEmployes(),
   ])
 
   return (
     <AdminDashboard
       absences={absences}
+      absencesCalendrier={absencesCalendrier}
       feuillesTemps={feuillesTemps}
+      feuillesTempsCalendrier={feuillesTempsCalendrier}
       employes={employes}
       moisSelectionne={mois}
       anneeSelectionnee={annee}

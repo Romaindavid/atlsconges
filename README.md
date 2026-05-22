@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atlantique Sellerie — Gestion RH
 
-## Getting Started
+Application web interne pour la gestion des congés et feuilles de temps.
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router, Server Actions)
+- **Supabase** (PostgreSQL + RLS)
+- **Tailwind CSS v4**
+- **Vercel** (déploiement)
+
+## Routes
+
+| Route | Description |
+|-------|-------------|
+| `/` | Page d'accueil avec les deux actions |
+| `/absence` | Formulaire de demande de congés |
+| `/temps` | Feuille de temps quotidienne |
+| `/admin` | Interface direction (protégée par mot de passe) |
+
+## Installation
+
+### 1. Cloner et installer les dépendances
+
+```bash
+git clone https://github.com/Romaindavid/atlsconges.git
+cd atlsconges
+npm install
+```
+
+### 2. Configurer Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com)
+2. Aller dans **SQL Editor** et exécuter le contenu de `supabase-schema.sql`
+3. Récupérer les clés API dans **Settings > API**
+
+### 3. Variables d'environnement
+
+Créer `.env.local` à la racine :
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://VOTRE_PROJECT_ID.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=VOTRE_ANON_KEY
+ADMIN_PASSWORD=votre_mot_de_passe_admin
+```
+
+### 4. Lancer en développement
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Déploiement Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Importer le repo GitHub sur [vercel.com](https://vercel.com)
+2. Ajouter les 3 variables d'environnement dans les paramètres Vercel
+3. Déployer
 
-## Learn More
+## Structure des fichiers
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+app/
+  page.tsx              ← Accueil
+  absence/
+    page.tsx            ← Formulaire absence
+    actions.ts          ← Server Actions (soumission)
+  temps/
+    page.tsx            ← Feuille de temps
+    actions.ts          ← Server Actions (soumission)
+  admin/
+    page.tsx            ← Dashboard direction
+    actions.ts          ← Server Actions (auth, CRUD)
+lib/
+  supabase.ts           ← Client Supabase + types
+  calcul-jours.ts       ← Calcul jours ouvrés
+components/
+  Header.tsx            ← Logo + navigation
+  FormAbsence.tsx       ← Formulaire congés (client)
+  FormTemps.tsx         ← Feuille de temps (client)
+  AdminDashboard.tsx    ← Dashboard admin (client)
+  AdminLogin.tsx        ← Écran de connexion admin
+supabase-schema.sql     ← SQL à exécuter dans Supabase
+```

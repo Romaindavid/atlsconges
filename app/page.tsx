@@ -1,65 +1,94 @@
-import Image from "next/image";
+import Link from 'next/link'
+import Image from 'next/image'
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="min-h-screen flex flex-col">
+      {/* Header marine avec logo */}
+      <header className="bg-marine-800 py-8 px-4 text-center">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="https://atlantiquesellerie.com/wp-content/uploads/2017/03/logo_horiz-white.png"
+          alt="Atlantique Sellerie"
+          width={280}
+          height={70}
+          className="h-16 w-auto mx-auto object-contain"
+          unoptimized
           priority
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+        <p className="text-marine-100 mt-3 text-lg">
+          Gestion des congés et feuilles de temps
+        </p>
+      </header>
+
+      {/* Contenu principal */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-2xl">
+          <h2 className="text-marine-800 text-2xl font-bold text-center mb-2">
+            Que souhaitez-vous faire ?
+          </h2>
+          <p className="text-marine-600 text-center mb-10 text-lg">
+            Choisissez une action ci-dessous
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+          {/* Deux gros boutons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* Demande de congés */}
+            <Link
+              href="/absence"
+              className="group flex flex-col items-center justify-center gap-4 bg-white rounded-2xl p-8 shadow-md border-2 border-transparent hover:border-orange-500 hover:shadow-xl transition-all duration-200 text-center"
+            >
+              <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center group-hover:bg-orange-500 transition-colors duration-200">
+                <svg className="w-10 h-10 text-orange-500 group-hover:text-white transition-colors duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <span className="block text-xl font-bold text-marine-800 group-hover:text-orange-600 transition-colors">
+                  Demande de congés
+                </span>
+                <span className="block text-marine-600 mt-1">
+                  Poser des jours d&apos;absence
+                </span>
+              </div>
+            </Link>
+
+            {/* Feuille de temps */}
+            <Link
+              href="/temps"
+              className="group flex flex-col items-center justify-center gap-4 bg-white rounded-2xl p-8 shadow-md border-2 border-transparent hover:border-orange-500 hover:shadow-xl transition-all duration-200 text-center"
+            >
+              <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center group-hover:bg-orange-500 transition-colors duration-200">
+                <svg className="w-10 h-10 text-orange-500 group-hover:text-white transition-colors duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <span className="block text-xl font-bold text-marine-800 group-hover:text-orange-600 transition-colors">
+                  Feuille de temps
+                </span>
+                <span className="block text-marine-600 mt-1">
+                  Saisir vos heures du jour
+                </span>
+              </div>
+            </Link>
+          </div>
+
+          {/* Lien admin discret */}
+          <div className="mt-12 text-center">
+            <Link
+              href="/admin"
+              className="text-marine-500 hover:text-marine-700 text-sm underline underline-offset-2"
+            >
+              Accès direction →
+            </Link>
+          </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-marine-900 text-marine-100 text-center py-4 text-sm">
+        © {new Date().getFullYear()} Atlantique Sellerie — Usage interne
+      </footer>
     </div>
-  );
+  )
 }

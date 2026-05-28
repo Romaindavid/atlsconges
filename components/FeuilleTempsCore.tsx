@@ -235,7 +235,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       const absence  = inMonth && !ferie
                         ? absencesAccordees.find(a => a.date_debut <= iso && a.date_fin >= iso) ?? null
                         : null
-                      const clickable = inMonth && !ferie && !isFutur && !absence
+                      const clickable = inMonth && !ferie && !absence
                       const defH     = parseFloat(defaultHours(iso)) || 0
                       const effectif = entry
                         ? (entry.heures_travaillees ?? defH) + (entry.heures_a_recuperer ?? 0)
@@ -287,7 +287,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                                 <span className="text-xs leading-none" title={entry.commentaire}>💬</span>
                               )}
                             </div>
-                          ) : inMonth && !isFutur && defH > 0 ? (
+                          ) : inMonth && defH > 0 ? (
                             <div className="flex items-center justify-center h-8">
                               <span className={`text-xs italic select-none ${isSam ? 'text-slate-300' : 'text-marine-300'}`}>
                                 {fmt(defH)}
@@ -369,7 +369,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
         {/* Solde récup total (historique) */}
         <div className={`rounded-2xl p-5 border shadow-sm ${
           soldeRecup > 0 ? 'bg-success-100 border-success-600/20' :
-          soldeRecup < 0 ? 'bg-danger-100  border-danger-600/20'  :
+          soldeRecup < 0 ? 'bg-violet-50   border-violet-300/40'  :
                            'bg-marine-50   border-marine-200'
         }`}>
           <p className="text-marine-500 text-xs uppercase tracking-wide mb-1">
@@ -377,13 +377,13 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
           </p>
           <p className={`text-2xl font-black mb-0.5 ${
             soldeRecup > 0 ? 'text-success-600' :
-            soldeRecup < 0 ? 'text-danger-600'  : 'text-marine-400'
+            soldeRecup < 0 ? 'text-violet-600'  : 'text-marine-400'
           }`}>
             {soldeRecup > 0 ? '+' : ''}{fmt(soldeRecup)}h
           </p>
           <p className={`text-xs font-medium ${
             soldeRecup > 0 ? 'text-success-600' :
-            soldeRecup < 0 ? 'text-danger-600'  : 'text-marine-500'
+            soldeRecup < 0 ? 'text-violet-500'  : 'text-marine-500'
           }`}>
             {soldeRecup > 0
               ? "✅ L'entreprise vous doit ces heures"

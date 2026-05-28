@@ -174,6 +174,9 @@ export type Employe = {
   actif: boolean
   created_at: string
   solde_depart_recuperation: number
+  code_pin: string | null
+  date_naissance: string | null
+  jour_anniversaire_pris: string | null
 }
 
 export async function getEmployes(): Promise<Employe[]> {
@@ -291,5 +294,75 @@ export async function setJourFerieOverride(
   const { error } = await getSupabase()
     .from('jours_feries_override')
     .upsert({ date, actif }, { onConflict: 'date' })
+  return { success: !error }
+}
+
+// ─── PIN employé ──────────────────────────────────────────────────────────────
+
+export async function setPinEmploye(
+  id: string,
+  pin: string | null
+): Promise<{ success: boolean }> {
+  const { error } = await getSupabase()
+    .from('employes')
+    .update({ code_pin: pin || null })
+    .eq('id', id)
+  return { success: !error }
+}
+
+// ─── Anniversaire employé ─────────────────────────────────────────────────────
+
+export async function setAnniversaireEmploye(
+  id: string,
+  dateNaissance: string | null,
+  jourPris: string | null
+): Promise<{ success: boolean }> {
+  const { error } = await getSupabase()
+    .from('employes')
+    .update({
+      date_naissance: dateNaissance || null,
+      jour_anniversaire_pris: jourPris || null,
+    })
+    .eq('id', id)
+  return { success: !error }
+}
+
+// ─── Vacances obligatoires ────────────────────────────────────────────────────
+
+export type VacanceObligatoire = {
+  id: string
+  date_debut: string
+  date_fin: string
+  nom: string
+}
+
+export async function getVacancesObligatoires(annee: number): Promise<VacanceObligatoire[]> {
+  const { data } = await getSupabase()
+    .from('vacances_obligatoires')
+    .select('id, date_debut, date_fin, nom')
+    .gte('date_fin', `${annee}-01-01`)
+    .lte('date_debut', `${annee}-12-31`)
+    .order('date_debut', { ascending: true })
+  return (data ?? []) as VacanceObligatoire[]
+}
+
+export async function createVacanceObligatoire(
+  dateDebut: string,
+  dateFin: string,
+  nom: string
+): Promise<{ success: boolean; message: string }> {
+  const { error } = await getSupabase()
+    .from('vacances_obligatoires')
+    .insert({ date_debut: dateDebut, date_fin: dateFin, nom: nom || 'Fermeture' })
+  return { success: !error, message: error ? 'Erreur lors de la création.' : 'Fermeture ajoutée.' }
+}
+
+export async function deleteVacanceObligatoire(
+  id: string
+): Promise<{ success: boolean }> {
+  const { error } = await getSupabase()
+    .from('vacances_obligatoires')
+    .delete()
+    .eq('id', id)
   return { success: !error }
 }

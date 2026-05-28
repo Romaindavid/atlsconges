@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe } from '@/app/admin/actions'
-import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride } from '@/app/admin/actions'
-import type { JourFerieEntry } from '@/app/admin/actions'
+import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe, JourFerieEntry, VacanceObligatoire } from '@/app/admin/actions'
+import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
 import { isJourFerie, formatDateFR } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 
@@ -28,6 +27,7 @@ type Props = {
   feuillesTempsCalendrier: FeuilleTempsAvecBateaux[]
   employes: Employe[]
   joursFeriesInitiaux: JourFerieEntry[]
+  vacancesInitiales: VacanceObligatoire[]
   moisSelectionne: number
   anneeSelectionnee: number
   salarieSearch: string
@@ -51,6 +51,7 @@ export default function AdminDashboard({
   feuillesTempsCalendrier,
   employes,
   joursFeriesInitiaux,
+  vacancesInitiales,
   moisSelectionne,
   anneeSelectionnee,
   salarieSearch,
@@ -58,6 +59,7 @@ export default function AdminDashboard({
   const router = useRouter()
   const [onglet, setOnglet] = useState<'absences' | 'temps' | 'feries' | 'employes'>('absences')
   const [joursFeries, setJoursFeries] = useState<JourFerieEntry[]>(joursFeriesInitiaux)
+  const [vacances, setVacances] = useState<VacanceObligatoire[]>(vacancesInitiales)
   const [isPending, startTransition] = useTransition()
 
   // --- État gestion employés ---
@@ -65,8 +67,17 @@ export default function AdminDashboard({
   const [empNom, setEmpNom] = useState('')
   const [empPrenom, setEmpPrenom] = useState('')
   const [empSoldeDepart, setEmpSoldeDepart] = useState('')
+  const [empPin, setEmpPin] = useState('')
+  const [empDateNaissance, setEmpDateNaissance] = useState('')
+  const [empJourAnniv, setEmpJourAnniv] = useState('')
   const [empErreur, setEmpErreur] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  // --- État vacances obligatoires ---
+  const [vacDebut, setVacDebut] = useState('')
+  const [vacFin, setVacFin]     = useState('')
+  const [vacNom, setVacNom]     = useState('')
+  const [vacMsg, setVacMsg]     = useState<string | null>(null)
 
   // État local pour les filtres
   const [mois, setMois] = useState(moisSelectionne)
@@ -116,17 +127,18 @@ export default function AdminDashboard({
 
   // --- Fonctions gestion employés ---
   function ouvrirCreationEmploye() {
-    setEmpNom('')
-    setEmpPrenom('')
-    setEmpSoldeDepart('0')
+    setEmpNom(''); setEmpPrenom(''); setEmpSoldeDepart('0')
+    setEmpPin(''); setEmpDateNaissance(''); setEmpJourAnniv('')
     setEmpErreur('')
     setEmpModal({ mode: 'create' })
   }
 
   function ouvrirEditionEmploye(emp: Employe) {
-    setEmpNom(emp.nom)
-    setEmpPrenom(emp.prenom)
+    setEmpNom(emp.nom); setEmpPrenom(emp.prenom)
     setEmpSoldeDepart(String(emp.solde_depart_recuperation ?? 0))
+    setEmpPin(emp.code_pin ?? '')
+    setEmpDateNaissance(emp.date_naissance ?? '')
+    setEmpJourAnniv(emp.jour_anniversaire_pris ?? '')
     setEmpErreur('')
     setEmpModal({ mode: 'edit', employe: emp })
   }
@@ -138,15 +150,17 @@ export default function AdminDashboard({
       let res
       if (empModal?.mode === 'create') {
         res = await createEmploye(empNom, empPrenom)
-        // Après création, mettre à jour le solde de départ si non nul
         if (res.success && solde !== 0) {
-          // On refresh pour récupérer l'ID du nouvel employé
           router.refresh()
         }
       } else if (empModal?.employe) {
+        const id = empModal.employe.id
+        const pinVal = empPin.trim().replace(/\D/g, '').slice(0, 4) || null
         const [resEmp, resSolde] = await Promise.all([
-          updateEmploye(empModal.employe.id, empNom, empPrenom),
-          updateSoldeDepart(empModal.employe.id, solde),
+          updateEmploye(id, empNom, empPrenom),
+          updateSoldeDepart(id, solde),
+          setPinEmploye(id, pinVal),
+          setAnniversaireEmploye(id, empDateNaissance || null, empJourAnniv || null),
         ])
         res = resEmp.success ? resSolde : resEmp
       } else return
@@ -173,6 +187,34 @@ export default function AdminDashboard({
     const newActif = !currentActif
     setJoursFeries(prev => prev.map(f => f.date === date ? { ...f, actif: newActif, isOverride: true } : f))
     await setJourFerieOverride(date, newActif)
+  }
+
+  // ── Vacances obligatoires ──────────────────────────────────────────────────
+  async function ajouterVacance() {
+    if (!vacDebut || !vacFin || vacFin < vacDebut) {
+      setVacMsg('⚠️ Dates invalides.')
+      return
+    }
+    startTransition(async () => {
+      const res = await createVacanceObligatoire(vacDebut, vacFin, vacNom || 'Fermeture')
+      if (res.success) {
+        setVacances(prev => [...prev, {
+          id: Date.now().toString(), date_debut: vacDebut, date_fin: vacFin, nom: vacNom || 'Fermeture',
+        }].sort((a, b) => a.date_debut.localeCompare(b.date_debut)))
+        setVacDebut(''); setVacFin(''); setVacNom('')
+        setVacMsg('✅ Fermeture ajoutée.')
+        setTimeout(() => setVacMsg(null), 3000)
+      } else {
+        setVacMsg('⚠️ Erreur lors de la création.')
+      }
+    })
+  }
+
+  async function supprimerVacance(id: string) {
+    startTransition(async () => {
+      await deleteVacanceObligatoire(id)
+      setVacances(prev => prev.filter(v => v.id !== id))
+    })
   }
 
   // ── Export XLS ──────────────────────────────────────────────────────────────
@@ -473,23 +515,60 @@ export default function AdminDashboard({
                 const wd = isWeekend(annee, mois, j)
                 const ferieOverride = joursFeries.find(f => f.date === ds)
                 const ferie = ferieOverride ? ferieOverride.actif : (!wd && isJourFerie(new Date(annee, mois - 1, j)))
-                return {
-                  j, ds,
-                  weekend: wd,
-                  ferie,
-                  dow: new Date(annee, mois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' }),
+                // Vacances obligatoires
+                const enVacance = vacances.some(v => v.date_debut <= ds && v.date_fin >= ds)
+                return { j, ds, weekend: wd, ferie, enVacance,
+                  dow: new Date(annee, mois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' }) }
+              })
+
+              // Anniversaires : jourPris OU date_naissance avec l'année courante
+              const anniversairesParJour = new Map<number, string[]>()
+              employes.forEach(emp => {
+                const jourPrisDate = emp.jour_anniversaire_pris
+                  ? new Date(emp.jour_anniversaire_pris + 'T12:00:00')
+                  : emp.date_naissance
+                  ? new Date(`${annee}-${emp.date_naissance.slice(5, 10)}T12:00:00`)
+                  : null
+                if (jourPrisDate && jourPrisDate.getMonth() + 1 === mois) {
+                  const j = jourPrisDate.getDate()
+                  if (!anniversairesParJour.has(j)) anniversairesParJour.set(j, [])
+                  anniversairesParJour.get(j)!.push(emp.prenom)
                 }
               })
+
+              function navCalendrier(delta: number) {
+                let m = mois + delta, a = annee
+                if (m > 12) { m = 1; a++ }
+                if (m < 1) { m = 12; a-- }
+                const params = new URLSearchParams()
+                params.set('mois', String(m))
+                params.set('annee', String(a))
+                if (recherche) params.set('q', recherche)
+                router.push(`/admin?${params.toString()}`)
+              }
+
               return (
                 <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">
                   <div className="flex items-center justify-between px-5 py-3 border-b border-marine-100 bg-marine-50 gap-3 flex-wrap">
-                    <h3 className="text-marine-700 font-bold text-sm">
-                      📅 Absences équipe — {MOIS[mois - 1]} {annee}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => navCalendrier(-1)} className="p-1.5 rounded-lg bg-white border border-marine-200 hover:bg-marine-100 transition-colors">
+                        <svg className="w-3.5 h-3.5 text-marine-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <h3 className="text-marine-700 font-bold text-sm w-44 text-center">
+                        📅 Absences équipe — {MOIS[mois - 1]} {annee}
+                      </h3>
+                      <button onClick={() => navCalendrier(1)} className="p-1.5 rounded-lg bg-white border border-marine-200 hover:bg-marine-100 transition-colors">
+                        <svg className="w-3.5 h-3.5 text-marine-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
                     <div className="flex items-center gap-3 text-xs text-marine-500">
-                      <span>🏝️ Congés payés</span>
-                      <span>🤮 Maladie</span>
-                      <span>😶 Autre</span>
+                      <span>🏝️ CP</span><span>🤮 Maladie</span><span>😶 Autre</span>
+                      <span className="border-l border-marine-200 pl-3">🟧 Fermeture</span>
+                      <span>🕯️ Anniversaire</span>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -499,29 +578,50 @@ export default function AdminDashboard({
                           <th className="sticky left-0 z-10 bg-marine-50 px-3 py-2 text-left text-marine-600 font-semibold min-w-36 border-r border-marine-100">
                             Salarié
                           </th>
-                          {joursLabel.map(({ j, weekend, ferie, dow }) => (
-                            <th key={j} className={`px-0 py-1 text-center w-7 ${weekend || ferie ? 'text-slate-400 bg-slate-50' : 'text-marine-600'}`}>
+                          {joursLabel.map(({ j, weekend, ferie, enVacance, dow }) => (
+                            <th key={j} className={`px-0 py-1 text-center w-7 ${weekend || ferie ? 'text-slate-400 bg-slate-50' : enVacance ? 'bg-orange-50/60' : 'text-marine-600'}`}>
                               <div className="text-[10px] font-normal">{dow}</div>
                               <div className={`font-bold ${ferie ? 'text-orange-400' : ''}`}>{j}</div>
                               {ferie && <div className="text-[8px] text-orange-400">F</div>}
+                              {!ferie && enVacance && <div className="text-[8px] text-orange-500">🏢</div>}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
+                        {/* Ligne anniversaires */}
+                        {anniversairesParJour.size > 0 && (
+                          <tr className="border-t border-marine-100 bg-amber-50/40">
+                            <td className="sticky left-0 z-10 bg-amber-50 px-3 py-1.5 font-medium text-amber-700 whitespace-nowrap border-r border-marine-100 text-xs">
+                              🕯️ Anniversaires
+                            </td>
+                            {joursLabel.map(({ j }) => {
+                              const noms = anniversairesParJour.get(j)
+                              return (
+                                <td key={j} className="w-7 h-7 text-center p-0.5">
+                                  {noms && (
+                                    <div className="w-full h-full flex items-center justify-center text-base leading-none" title={noms.join(', ')}>
+                                      🕯️
+                                    </div>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )}
                         {employes.map(emp => (
                           <tr key={emp.id} className="border-t border-marine-100 hover:bg-marine-50/30">
                             <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-marine-800 whitespace-nowrap border-r border-marine-100">
                               {emp.prenom} {emp.nom}
                             </td>
-                            {joursLabel.map(({ j, ds, weekend, ferie }) => {
+                            {joursLabel.map(({ j, ds, weekend, ferie, enVacance }) => {
                               const ab = absencesCalendrier.find(a =>
                                 a.nom === emp.nom && a.prenom === emp.prenom &&
                                 a.statut !== 'refuse' &&
                                 a.date_debut <= ds && a.date_fin >= ds
                               )
                               return (
-                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${weekend || ferie ? 'bg-slate-50/60' : ''}`}>
+                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${weekend || ferie ? 'bg-slate-50/60' : enVacance ? 'bg-orange-50/40' : ''}`}>
                                   {ab ? (
                                     <div
                                       className={`w-full h-full flex items-center justify-center text-base leading-none ${ab.statut === 'en_attente' ? 'opacity-50' : ''}`}
@@ -585,9 +685,9 @@ export default function AdminDashboard({
                     <tr>
                       <th className="text-left px-5 py-3 text-marine-600 font-semibold text-sm">Nom</th>
                       <th className="text-left px-5 py-3 text-marine-600 font-semibold text-sm">Prénom</th>
-                      <th className="px-4 py-3 text-center text-marine-600 font-semibold text-sm" title="Solde de départ récupération d'heures">
-                        Solde départ récup.
-                      </th>
+                      <th className="px-4 py-3 text-center text-marine-600 font-semibold text-sm">Solde récup.</th>
+                      <th className="px-4 py-3 text-center text-marine-600 font-semibold text-sm">PIN</th>
+                      <th className="px-4 py-3 text-center text-marine-600 font-semibold text-sm">🎂 Naissance</th>
                       <th className="px-5 py-3 text-right text-marine-600 font-semibold text-sm">Actions</th>
                     </tr>
                   </thead>
@@ -606,6 +706,20 @@ export default function AdminDashboard({
                           }`}>
                             {sd > 0 ? '+' : ''}{sd}h
                           </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {emp.code_pin
+                            ? <span className="bg-marine-100 text-marine-600 text-xs font-bold px-2 py-1 rounded-lg tracking-widest">••••</span>
+                            : <span className="text-marine-300 text-xs">—</span>
+                          }
+                        </td>
+                        <td className="px-4 py-4 text-center text-marine-600 text-sm">
+                          {emp.date_naissance
+                            ? <span title={`Anniversaire pris le : ${emp.jour_anniversaire_pris ? formatDateFR(emp.jour_anniversaire_pris) : formatDateFR(emp.date_naissance)}`}>
+                                🎂 {formatDateFR(emp.date_naissance)}
+                              </span>
+                            : <span className="text-marine-300">—</span>
+                          }
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
@@ -633,9 +747,11 @@ export default function AdminDashboard({
           </div>
         )}
 
-        {/* ====== ONGLET JOURS FÉRIÉS ====== */}
+        {/* ====== ONGLET JOURS FÉRIÉS & FERMETURES ====== */}
         {onglet === 'feries' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+
+            {/* ── Jours fériés ── */}
             <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">
               <div className="px-5 py-3 border-b border-marine-100 bg-marine-50 flex items-center justify-between">
                 <h3 className="text-marine-700 font-bold">Jours fériés — {annee}</h3>
@@ -656,7 +772,6 @@ export default function AdminDashboard({
                           {f.isOverride && <span className="ml-2 text-orange-400 font-medium">modifié</span>}
                         </p>
                       </div>
-                      {/* Toggle switch */}
                       <button
                         onClick={() => toggleJourFerie(f.date, f.actif)}
                         className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${f.actif ? 'bg-marine-600' : 'bg-slate-300'}`}
@@ -668,6 +783,83 @@ export default function AdminDashboard({
                   ))}
                 </ul>
               )}
+            </div>
+
+            {/* ── Fermetures / Vacances obligatoires ── */}
+            <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">
+              <div className="px-5 py-3 border-b border-marine-100 bg-marine-50">
+                <h3 className="text-marine-700 font-bold">Fermetures &amp; Vacances obligatoires</h3>
+                <p className="text-marine-400 text-xs mt-0.5">Périodes où tout le monde est fermé — apparaît en orange sur le calendrier</p>
+              </div>
+
+              {/* Liste */}
+              {vacances.length === 0 ? (
+                <p className="px-5 py-4 text-marine-400 text-sm">Aucune fermeture saisie.</p>
+              ) : (
+                <ul className="divide-y divide-marine-100">
+                  {vacances.map(v => (
+                    <li key={v.id} className="flex items-center justify-between px-5 py-3 hover:bg-marine-50/40">
+                      <div>
+                        <p className="text-marine-800 font-semibold text-sm">{v.nom}</p>
+                        <p className="text-marine-400 text-xs">
+                          Du {formatDateFR(v.date_debut)} au {formatDateFR(v.date_fin)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => supprimerVacance(v.id)}
+                        disabled={isPending}
+                        className="text-danger-600 hover:bg-danger-100 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        🗑️ Supprimer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* Formulaire ajout */}
+              <div className="px-5 py-4 border-t border-marine-100 bg-marine-50/30">
+                {vacMsg && (
+                  <p className="mb-3 text-sm font-medium">{vacMsg}</p>
+                )}
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <label className="block text-marine-600 text-xs mb-1">Libellé</label>
+                    <input
+                      type="text"
+                      value={vacNom}
+                      onChange={e => setVacNom(e.target.value)}
+                      placeholder="Fermeture annuelle"
+                      className="border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 text-sm focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-marine-600 text-xs mb-1">Début</label>
+                    <input
+                      type="date"
+                      value={vacDebut}
+                      onChange={e => setVacDebut(e.target.value)}
+                      className="border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 text-sm focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-marine-600 text-xs mb-1">Fin</label>
+                    <input
+                      type="date"
+                      value={vacFin}
+                      onChange={e => setVacFin(e.target.value)}
+                      className="border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 text-sm focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={ajouterVacance}
+                    disabled={isPending || !vacDebut || !vacFin}
+                    className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+                  >
+                    + Ajouter
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -760,15 +952,12 @@ export default function AdminDashboard({
               </div>
             )}
 
-            <div className="space-y-4 mb-5">
+            <div className="space-y-4 mb-5 max-h-[70vh] overflow-y-auto pr-1">
               <div>
                 <label className="block text-marine-700 font-semibold mb-2">
                   Nom <span className="text-danger-600">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={empNom}
-                  onChange={(e) => setEmpNom(e.target.value)}
+                <input type="text" value={empNom} onChange={e => setEmpNom(e.target.value)}
                   placeholder="Ex : DUPONT"
                   className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
                 />
@@ -777,28 +966,41 @@ export default function AdminDashboard({
                 <label className="block text-marine-700 font-semibold mb-2">
                   Prénom <span className="text-danger-600">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={empPrenom}
-                  onChange={(e) => setEmpPrenom(e.target.value)}
+                <input type="text" value={empPrenom} onChange={e => setEmpPrenom(e.target.value)}
                   placeholder="Ex : Jean"
                   className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-marine-700 font-semibold mb-1">
-                  ⏱ Solde de départ récupération (h)
-                </label>
-                <p className="text-marine-400 text-xs mb-2">
-                  Heures déjà accumulées avant l'utilisation de l'appli. Positif = l'entreprise doit. Négatif = à rattraper.
-                </p>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={empSoldeDepart}
-                  onChange={(e) => setEmpSoldeDepart(e.target.value)}
+                <label className="block text-marine-700 font-semibold mb-1">⏱ Solde de départ récup. (h)</label>
+                <p className="text-marine-400 text-xs mb-2">Heures avant l&apos;appli. Positif = entreprise doit. Négatif = à rattraper.</p>
+                <input type="text" inputMode="decimal" value={empSoldeDepart} onChange={e => setEmpSoldeDepart(e.target.value)}
                   placeholder="0"
-                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-3 text-marine-900 text-lg placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-2 text-marine-900 placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-marine-700 font-semibold mb-1">🔐 Code PIN (4 chiffres)</label>
+                <p className="text-marine-400 text-xs mb-2">Laisser vide pour désactiver le PIN.</p>
+                <input type="text" inputMode="numeric" maxLength={4} value={empPin}
+                  onChange={e => setEmpPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="ex : 1234"
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-2 text-marine-900 placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors tracking-widest text-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-marine-700 font-semibold mb-1">🎂 Date de naissance</label>
+                <input type="date" value={empDateNaissance} onChange={e => setEmpDateNaissance(e.target.value)}
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-2 text-marine-900 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-marine-700 font-semibold mb-1">🕯️ Jour anniversaire pris le</label>
+                <p className="text-marine-400 text-xs mb-2">
+                  Automatiquement = jour de naissance. À modifier si l&apos;anniversaire tombe un weekend.
+                </p>
+                <input type="date" value={empJourAnniv} onChange={e => setEmpJourAnniv(e.target.value)}
+                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-2 text-marine-900 focus:border-orange-500 focus:outline-none transition-colors"
                 />
               </div>
             </div>

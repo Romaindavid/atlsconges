@@ -1,4 +1,4 @@
-import { isEmployeeAuthenticated, getEmployeeSession, getAbsencesEmployee } from './actions'
+import { isEmployeeAuthenticated, getEmployeeSession, getAbsencesEmployee, getAbsencesEquipe, getEmployeNoms } from './actions'
 import { getFeuillesMois, getSoldeRecupComplet } from './temps/actions'
 import { getEmployes } from './admin/actions'
 import EmployeePasswordForm from '@/components/EmployeePasswordForm'
@@ -18,7 +18,12 @@ export default async function HomePage() {
   const employee = await getEmployeeSession()
   if (!employee) {
     const employes = await getEmployes()
-    return <EmployeeNameSelect employes={employes} />
+    return <EmployeeNameSelect employes={employes.map(e => ({
+      id: e.id,
+      nom: e.nom,
+      prenom: e.prenom,
+      hasPin: !!(e.code_pin),
+    }))} />
   }
 
   // Étape 3 : tout ok → dashboard + feuille de temps du mois
@@ -26,10 +31,12 @@ export default async function HomePage() {
   const mois  = now.getMonth() + 1
   const annee = now.getFullYear()
 
-  const [absences, entries, soldeRecupInitial] = await Promise.all([
+  const [absences, entries, soldeRecupInitial, absencesEquipeInitiales, employesNoms] = await Promise.all([
     getAbsencesEmployee(employee.nom, employee.prenom),
     getFeuillesMois(employee.nom, employee.prenom, mois, annee),
     getSoldeRecupComplet(employee.nom, employee.prenom, employee.id),
+    getAbsencesEquipe(mois, annee),
+    getEmployeNoms(),
   ])
 
   return (
@@ -40,6 +47,8 @@ export default async function HomePage() {
       moisInitial={mois}
       anneeInitiale={annee}
       soldeRecupInitial={soldeRecupInitial}
+      absencesEquipeInitiales={absencesEquipeInitiales}
+      employesNoms={employesNoms}
     />
   )
 }

@@ -92,6 +92,63 @@ export type AbsenceEmploye = {
   commentaire_direction: string | null
 }
 
+export async function selectEmployeeWithPin(
+  id: string, nom: string, prenom: string, pin: string
+): Promise<{ success: boolean; message?: string }> {
+  const { data } = await getSupabase()
+    .from('employes')
+    .select('code_pin')
+    .eq('id', id)
+    .single()
+  const storedPin: string | null = (data as { code_pin: string | null } | null)?.code_pin ?? null
+  if (storedPin && storedPin !== pin) {
+    return { success: false, message: 'Code PIN incorrect.' }
+  }
+  const cookieStore = await cookies()
+  cookieStore.set(EMPLOYEE_COOKIE, JSON.stringify({ id, nom, prenom }), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: COOKIE_MAX_AGE,
+    sameSite: 'lax',
+    path: '/',
+  })
+  return { success: true }
+}
+
+export type AbsenceEquipe = {
+  nom: string
+  prenom: string
+  type_absence: string
+  date_debut: string
+  date_fin: string
+}
+
+export async function getAbsencesEquipe(mois: number, annee: number): Promise<AbsenceEquipe[]> {
+  const dateDebutMois = `${annee}-${String(mois).padStart(2, '0')}-01`
+  const dernierJour = new Date(annee, mois, 0).getDate()
+  const dateFinMois = `${annee}-${String(mois).padStart(2, '0')}-${String(dernierJour).padStart(2, '0')}`
+  const { data, error } = await getSupabase()
+    .from('absences')
+    .select('nom, prenom, type_absence, date_debut, date_fin')
+    .eq('statut', 'accorde')
+    .lte('date_debut', dateFinMois)
+    .gte('date_fin', dateDebutMois)
+    .order('date_debut', { ascending: true })
+  if (error) return []
+  return data as AbsenceEquipe[]
+}
+
+export type EmployeNom = { id: string; nom: string; prenom: string }
+
+export async function getEmployeNoms(): Promise<EmployeNom[]> {
+  const { data } = await getSupabase()
+    .from('employes')
+    .select('id, nom, prenom')
+    .eq('actif', true)
+    .order('nom', { ascending: true })
+  return (data ?? []) as EmployeNom[]
+}
+
 export async function getAbsencesEmployee(
   nom: string,
   prenom: string

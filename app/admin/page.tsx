@@ -1,4 +1,4 @@
-import { isAdminAuthenticated, getAbsences, getFeuillesTemps, getEmployes, getJoursFeriesAvecOverrides } from './actions'
+import { isAdminAuthenticated, getAbsences, getFeuillesTemps, getEmployes, getJoursFeriesAvecOverrides, getVacancesObligatoires } from './actions'
 import AdminDashboard from '@/components/AdminDashboard'
 import AdminLogin from '@/components/AdminLogin'
 
@@ -32,13 +32,14 @@ export default async function AdminPage({
   const annee = parseInt(params.annee ?? String(now.getFullYear()))
   const q = params.q ?? ''
 
-  const [absences, absencesCalendrier, feuillesTemps, feuillesTempsCalendrier, employes, joursFeries] = await Promise.all([
+  const [absences, absencesCalendrier, feuillesTemps, feuillesTempsCalendrier, employes, joursFeries, vacances] = await Promise.all([
     getAbsences(mois, annee, q),
     getAbsences(mois, annee),
     getFeuillesTemps(mois, annee, q),
     getFeuillesTemps(mois, annee),
     getEmployes(),
     getJoursFeriesAvecOverrides(annee),
+    getVacancesObligatoires(annee),
   ])
 
   return (
@@ -49,6 +50,7 @@ export default async function AdminPage({
       feuillesTempsCalendrier={feuillesTempsCalendrier}
       employes={employes}
       joursFeriesInitiaux={joursFeries}
+      vacancesInitiales={vacances}
       moisSelectionne={mois}
       anneeSelectionnee={annee}
       salarieSearch={q}

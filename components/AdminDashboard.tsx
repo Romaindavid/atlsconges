@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe, JourFerieEntry, VacanceObligatoire } from '@/app/admin/actions'
 import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
 import { isJourFerie, formatDateFR } from '@/lib/calcul-jours'
@@ -78,6 +78,10 @@ export default function AdminDashboard({
   const [vacFin, setVacFin]     = useState('')
   const [vacNom, setVacNom]     = useState('')
   const [vacMsg, setVacMsg]     = useState<string | null>(null)
+
+  // Sync state quand les props changent (navigation calendrier via router.push)
+  useEffect(() => { setMois(moisSelectionne) }, [moisSelectionne])
+  useEffect(() => { setAnnee(anneeSelectionnee) }, [anneeSelectionnee])
 
   // État local pour les filtres
   const [mois, setMois] = useState(moisSelectionne)

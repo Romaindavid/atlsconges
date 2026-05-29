@@ -134,6 +134,17 @@ export async function sauvegarderJournee(
  * Solde de récupération total sur tout l'historique :
  *   solde_depart_recuperation (DB employes) + somme de tous les heures_a_recuperer
  */
+export type JourFerieOverride = { date: string; actif: boolean }
+
+export async function getJoursFeriesOverrides(annee: number): Promise<JourFerieOverride[]> {
+  const { data } = await getSupabase()
+    .from('jours_feries_override')
+    .select('date, actif')
+    .gte('date', `${annee}-01-01`)
+    .lte('date', `${annee}-12-31`)
+  return (data ?? []) as JourFerieOverride[]
+}
+
 export async function getSoldeRecupComplet(
   nom: string,
   prenom: string,

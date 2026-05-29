@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { changeEmployee, getAbsencesEquipe } from '@/app/actions'
 import type { AbsenceEmploye, AbsenceEquipe, EmployeNom } from '@/app/actions'
-import type { JourneeEntry } from '@/app/temps/actions'
+import { getJoursFeriesOverrides } from '@/app/temps/actions'
+import type { JourneeEntry, JourFerieOverride } from '@/app/temps/actions'
 import { formatDateFR, isJourFerie } from '@/lib/calcul-jours'
 import FeuilleTempsCore from '@/components/FeuilleTempsCore'
 
@@ -40,11 +41,12 @@ type Props = {
   soldeRecupInitial: number
   absencesEquipeInitiales: AbsenceEquipe[]
   employesNoms: EmployeNom[]
+  joursFeriesOverridesInitiales: JourFerieOverride[]
 }
 
 export default function EmployeeDashboard({
   employee, absences, entriesInitiales, moisInitial, anneeInitiale,
-  soldeRecupInitial, absencesEquipeInitiales, employesNoms,
+  soldeRecupInitial, absencesEquipeInitiales, employesNoms, joursFeriesOverridesInitiales,
 }: Props) {
   const router = useRouter()
   const [onglet, setOnglet] = useState<'feuille' | 'equipe'>('feuille')
@@ -145,6 +147,7 @@ export default function EmployeeDashboard({
                   anneeInitiale={anneeInitiale}
                   soldeRecupInitial={soldeRecupInitial}
                   absencesAccordees={absencesAccordees}
+                  joursFeriesOverridesInitiales={joursFeriesOverridesInitiales}
                 />
               </section>
 

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { getFeuillesMois, sauvegarderJournee, getSoldeRecupComplet } from '@/app/temps/actions'
-import type { JourneeEntry } from '@/app/temps/actions'
+import { getFeuillesMois, sauvegarderJournee, getSoldeRecupComplet, getJoursFeriesOverrides } from '@/app/temps/actions'
+import type { JourneeEntry, JourFerieOverride } from '@/app/temps/actions'
 import { isJourFerie } from '@/lib/calcul-jours'
 
 // Emoji par type d'absence
@@ -81,9 +81,10 @@ export type Props = {
   anneeInitiale: number
   soldeRecupInitial: number
   absencesAccordees: AbsenceAccordee[]
+  joursFeriesOverridesInitiales: JourFerieOverride[]
 }
 
-export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial, absencesAccordees }: Props) {
+export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial, absencesAccordees, joursFeriesOverridesInitiales }: Props) {
   const [mois,        setMois]        = useState(moisInitial)
   const [annee,       setAnnee]       = useState(anneeInitiale)
   const [entries,     setEntries]     = useState<JourneeEntry[]>(entriesInitiales)
@@ -92,6 +93,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
   const [saving,      setSaving]      = useState(false)
   const [saveMsg,     setSaveMsg]     = useState<string | null>(null)
   const [soldeRecup,  setSoldeRecup]  = useState(soldeRecupInitial)
+  const [feriesOv,    setFeriesOv]    = useState<JourFerieOverride[]>(joursFeriesOverridesInitiales)
 
   const today = todayISO()
   const weeks = getWeeksOfMonth(annee, mois)
@@ -106,8 +108,12 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
     if (m > 12) { m = 1;  a++ }
     if (m < 1)  { m = 12; a-- }
     setLoadingMois(true)
-    const data = await getFeuillesMois(employe.nom, employe.prenom, m, a)
+    const [data, ovs] = await Promise.all([
+      getFeuillesMois(employe.nom, employe.prenom, m, a),
+      a !== annee ? getJoursFeriesOverrides(a) : Promise.resolve(null),
+    ])
     setMois(m); setAnnee(a); setEntries(data)
+    if (ovs !== null) setFeriesOv(ovs)
     setLoadingMois(false)
   }
 
@@ -227,7 +233,10 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                     {week.days.map((jour, i) => {
                       const iso      = dateToISO(jour)
                       const inMonth  = jour.getMonth() + 1 === mois
-                      const ferie    = inMonth && isJourFerie(jour)
+                      const ferie    = inMonth && (() => {
+                        const ov = feriesOv.find(o => o.date === iso)
+                        return ov !== undefined ? ov.actif : isJourFerie(jour)
+                      })()
                       const isSam    = i === 5
                       const isToday  = iso === today
                       const isFutur  = iso > today

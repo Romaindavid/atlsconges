@@ -1,5 +1,5 @@
 import { isEmployeeAuthenticated, getEmployeeSession, getAbsencesEmployee, getAbsencesEquipe, getEmployeNoms } from './actions'
-import { getFeuillesMois, getSoldeRecupComplet } from './temps/actions'
+import { getFeuillesMois, getSoldeRecupComplet, getJoursFeriesOverrides } from './temps/actions'
 import { getEmployes } from './admin/actions'
 import EmployeePasswordForm from '@/components/EmployeePasswordForm'
 import EmployeeNameSelect from '@/components/EmployeeNameSelect'
@@ -31,12 +31,13 @@ export default async function HomePage() {
   const mois  = now.getMonth() + 1
   const annee = now.getFullYear()
 
-  const [absences, entries, soldeRecupInitial, absencesEquipeInitiales, employesNoms] = await Promise.all([
+  const [absences, entries, soldeRecupInitial, absencesEquipeInitiales, employesNoms, joursFeriesOverrides] = await Promise.all([
     getAbsencesEmployee(employee.nom, employee.prenom),
     getFeuillesMois(employee.nom, employee.prenom, mois, annee),
     getSoldeRecupComplet(employee.nom, employee.prenom, employee.id),
     getAbsencesEquipe(mois, annee),
     getEmployeNoms(),
+    getJoursFeriesOverrides(annee),
   ])
 
   return (
@@ -49,6 +50,7 @@ export default async function HomePage() {
       soldeRecupInitial={soldeRecupInitial}
       absencesEquipeInitiales={absencesEquipeInitiales}
       employesNoms={employesNoms}
+      joursFeriesOverridesInitiales={joursFeriesOverrides}
     />
   )
 }

@@ -60,6 +60,7 @@ export default function AdminDashboard({
   const [onglet, setOnglet] = useState<'absences' | 'temps' | 'feries' | 'employes'>('absences')
   const [joursFeries, setJoursFeries] = useState<JourFerieEntry[]>(joursFeriesInitiaux)
   const [vacances, setVacances] = useState<VacanceObligatoire[]>(vacancesInitiales)
+  const [feriesErreur, setFeriesErreur] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // --- État gestion employés ---
@@ -189,8 +190,15 @@ export default function AdminDashboard({
   // ── Toggle jour férié ──────────────────────────────────────────────────────
   async function toggleJourFerie(date: string, currentActif: boolean) {
     const newActif = !currentActif
+    setFeriesErreur(null)
+    // Optimistic update
     setJoursFeries(prev => prev.map(f => f.date === date ? { ...f, actif: newActif, isOverride: true } : f))
-    await setJourFerieOverride(date, newActif)
+    const res = await setJourFerieOverride(date, newActif)
+    if (!res.success) {
+      // Rollback
+      setJoursFeries(prev => prev.map(f => f.date === date ? { ...f, actif: currentActif } : f))
+      setFeriesErreur('⚠️ Erreur de sauvegarde. La table jours_feries_override n\'existe peut-être pas encore — exécutez supabase-migration-jours-feries.sql dans Supabase.')
+    }
   }
 
   // ── Vacances obligatoires ──────────────────────────────────────────────────
@@ -754,6 +762,12 @@ export default function AdminDashboard({
         {/* ====== ONGLET JOURS FÉRIÉS & FERMETURES ====== */}
         {onglet === 'feries' && (
           <div className="space-y-6">
+
+            {feriesErreur && (
+              <div className="p-4 bg-danger-100 border border-danger-600/20 rounded-2xl text-danger-600 text-sm font-medium">
+                {feriesErreur}
+              </div>
+            )}
 
             {/* ── Jours fériés ── */}
             <div className="bg-white rounded-2xl border border-marine-100 overflow-hidden">

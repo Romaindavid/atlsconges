@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { getFeuillesMois, sauvegarderJournee, getSoldeRecupComplet, getJoursFeriesOverrides } from '@/app/temps/actions'
-import type { JourneeEntry, JourFerieOverride } from '@/app/temps/actions'
+import type { JourneeEntry, JourFerieOverride, VacancePeriode } from '@/app/temps/actions'
 import { isJourFerie } from '@/lib/calcul-jours'
 
 // Emoji par type d'absence
@@ -82,9 +82,10 @@ export type Props = {
   soldeRecupInitial: number
   absencesAccordees: AbsenceAccordee[]
   joursFeriesOverridesInitiales: JourFerieOverride[]
+  vacancesInitiales: VacancePeriode[]
 }
 
-export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial, absencesAccordees, joursFeriesOverridesInitiales }: Props) {
+export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitial, anneeInitiale, soldeRecupInitial, absencesAccordees, joursFeriesOverridesInitiales, vacancesInitiales }: Props) {
   const [mois,        setMois]        = useState(moisInitial)
   const [annee,       setAnnee]       = useState(anneeInitiale)
   const [entries,     setEntries]     = useState<JourneeEntry[]>(entriesInitiales)
@@ -94,12 +95,32 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
   const [saveMsg,     setSaveMsg]     = useState<string | null>(null)
   const [soldeRecup,  setSoldeRecup]  = useState(soldeRecupInitial)
   const [feriesOv,    setFeriesOv]    = useState<JourFerieOverride[]>(joursFeriesOverridesInitiales)
+  const vacances = vacancesInitiales
 
   const today = todayISO()
   const weeks = getWeeksOfMonth(annee, mois)
   const byDate = new Map(entries.map(e => [e.date_journee, e]))
 
-  const totalHeures  = entries.reduce((s, e) => s + (e.heures_travaillees ?? 0) + (e.heures_a_recuperer ?? 0), 0)
+  // Heures effectives par jour : DB si enregistré, sinon heures standard (hors WE/férié/absence/futur)
+  const dailyEffectiveMap = new Map<string, number>()
+  weeks.forEach(week => {
+    week.days.forEach(jour => {
+      const iso = dateToISO(jour)
+      if (jour.getMonth() + 1 !== mois || iso > today) return
+      const dow = jour.getDay()
+      if (dow === 0 || dow === 6) return
+      const ferie = (() => { const ov = feriesOv.find(o => o.date === iso); return ov !== undefined ? ov.actif : isJourFerie(jour) })()
+      if (ferie) return
+      if (absencesAccordees.find(a => a.date_debut <= iso && a.date_fin >= iso)) return
+      const entry = byDate.get(iso)
+      dailyEffectiveMap.set(iso, entry
+        ? (entry.heures_travaillees ?? 0) + (entry.heures_a_recuperer ?? 0)
+        : parseFloat(defaultHours(iso)) || 0
+      )
+    })
+  })
+
+  const totalHeures  = [...dailyEffectiveMap.values()].reduce((s, h) => s + h, 0)
   const totalRecup   = entries.reduce((s, e) => s + (e.heures_a_recuperer  ?? 0), 0)
   const totalPointes = entries.reduce((s, e) => s + (e.pointes_bateaux?.length ?? 0), 0)
 
@@ -220,7 +241,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
               {weeks.map((week, wi) => {
                 const inMonthDays = week.days.filter(d => d.getMonth() + 1 === mois)
                 const weekEntries = inMonthDays.map(d => byDate.get(dateToISO(d))).filter(Boolean) as JourneeEntry[]
-                const weekHeures  = weekEntries.reduce((s, e) => s + (e.heures_travaillees ?? 0) + (e.heures_a_recuperer ?? 0), 0)
+                const weekHeures  = inMonthDays.reduce((s, d) => s + (dailyEffectiveMap.get(dateToISO(d)) ?? 0), 0)
                 const weekRecup   = weekEntries.reduce((s, e) => s + (e.heures_a_recuperer  ?? 0), 0)
                 const weekPointes = weekEntries.flatMap(e => e.pointes_bateaux ?? [])
 
@@ -241,6 +262,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       const isToday  = iso === today
                       const isFutur  = iso > today
                       const entry    = byDate.get(iso)
+                      const enVacance = inMonth && !ferie && vacances.some(v => v.date_debut <= iso && v.date_fin >= iso)
                       const absence  = inMonth && !ferie
                         ? absencesAccordees.find(a => a.date_debut <= iso && a.date_fin >= iso) ?? null
                         : null
@@ -259,10 +281,11 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                             'border-r border-marine-100 text-center align-top relative px-1 pt-1',
                             !inMonth              ? 'bg-slate-50/50' : '',
                             isSam && inMonth      ? 'bg-slate-100/60' : '',
-                            isToday               ? '!bg-orange-50 border-l-2 !border-l-orange-400' : '',
+                            enVacance && !isToday ? '!bg-orange-50' : '',
+                            isToday               ? '!bg-orange-100 border-l-2 !border-l-orange-400' : '',
                             ferie                 ? '!bg-slate-100' : '',
                             absence               ? '!bg-marine-100/40' : '',
-                            clickable             ? 'cursor-pointer hover:bg-orange-50/60 transition-colors' : '',
+                            clickable             ? 'cursor-pointer hover:bg-orange-100/60 transition-colors' : '',
                           ].filter(Boolean).join(' ')}
                         >
                           {/* Numéro du jour */}

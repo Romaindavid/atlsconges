@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { changeEmployee, getAbsencesEquipe } from '@/app/actions'
 import type { AbsenceEmploye, AbsenceEquipe, EmployeNom } from '@/app/actions'
 import { getJoursFeriesOverrides } from '@/app/temps/actions'
-import type { JourneeEntry, JourFerieOverride } from '@/app/temps/actions'
+import type { JourneeEntry, JourFerieOverride, VacancePeriode } from '@/app/temps/actions'
 import { formatDateFR, isJourFerie } from '@/lib/calcul-jours'
 import FeuilleTempsCore from '@/components/FeuilleTempsCore'
 
@@ -42,11 +42,12 @@ type Props = {
   absencesEquipeInitiales: AbsenceEquipe[]
   employesNoms: EmployeNom[]
   joursFeriesOverridesInitiales: JourFerieOverride[]
+  vacancesInitiales: VacancePeriode[]
 }
 
 export default function EmployeeDashboard({
   employee, absences, entriesInitiales, moisInitial, anneeInitiale,
-  soldeRecupInitial, absencesEquipeInitiales, employesNoms, joursFeriesOverridesInitiales,
+  soldeRecupInitial, absencesEquipeInitiales, employesNoms, joursFeriesOverridesInitiales, vacancesInitiales,
 }: Props) {
   const router = useRouter()
   const [onglet, setOnglet] = useState<'feuille' | 'equipe'>('feuille')
@@ -148,6 +149,7 @@ export default function EmployeeDashboard({
                   soldeRecupInitial={soldeRecupInitial}
                   absencesAccordees={absencesAccordees}
                   joursFeriesOverridesInitiales={joursFeriesOverridesInitiales}
+                  vacancesInitiales={vacancesInitiales}
                 />
               </section>
 

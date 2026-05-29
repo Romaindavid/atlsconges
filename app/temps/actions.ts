@@ -134,6 +134,16 @@ export async function sauvegarderJournee(
  * Solde de récupération total sur tout l'historique :
  *   solde_depart_recuperation (DB employes) + somme de tous les heures_a_recuperer
  */
+export type VacancePeriode = { date_debut: string; date_fin: string }
+
+export async function getVacancesObligatoires(): Promise<VacancePeriode[]> {
+  const { data } = await getSupabase()
+    .from('vacances_obligatoires')
+    .select('date_debut, date_fin')
+    .order('date_debut', { ascending: true })
+  return (data ?? []) as VacancePeriode[]
+}
+
 export type JourFerieOverride = { date: string; actif: boolean }
 
 export async function getJoursFeriesOverrides(annee: number): Promise<JourFerieOverride[]> {

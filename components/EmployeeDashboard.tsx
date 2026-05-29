@@ -234,10 +234,11 @@ export default function EmployeeDashboard({
                       </svg>
                     </button>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-marine-500">
+                  <div className="flex items-center gap-3 text-xs text-marine-500 flex-wrap">
                     <span>🏝️ CP</span>
                     <span>🤮 Maladie</span>
                     <span>😶 Autre</span>
+                    <span className="border-l border-marine-200 pl-3">🟧 Fermeture</span>
                   </div>
                 </div>
 
@@ -255,12 +256,14 @@ export default function EmployeeDashboard({
                             const ds  = isoDay(teamAnnee, teamMois, j)
                             const wd  = isWeekend(teamAnnee, teamMois, j)
                             const ferie = !wd && isJourFerie(new Date(teamAnnee, teamMois - 1, j))
+                            const enVacance = !wd && !ferie && vacancesInitiales.some(v => v.date_debut <= ds && v.date_fin >= ds)
                             const dow = new Date(teamAnnee, teamMois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' })
                             return (
-                              <th key={j} className={`px-0 py-1 text-center w-7 ${wd || ferie ? 'text-slate-400 bg-slate-50' : 'text-marine-600'}`}>
+                              <th key={j} className={`px-0 py-1 text-center w-7 ${wd || ferie ? 'text-slate-400 bg-slate-50' : enVacance ? 'bg-orange-100 text-marine-600' : 'text-marine-600'}`}>
                                 <div className="text-[10px] font-normal">{dow}</div>
                                 <div className={`font-bold ${ferie ? 'text-orange-400' : ''}`}>{j}</div>
                                 {ferie && <div className="text-[8px] text-orange-400">F</div>}
+                                {!ferie && enVacance && <div className="text-[8px] text-orange-500">🏢</div>}
                               </th>
                             )
                           })}
@@ -279,12 +282,13 @@ export default function EmployeeDashboard({
                               const ds  = isoDay(teamAnnee, teamMois, j)
                               const wd  = isWeekend(teamAnnee, teamMois, j)
                               const ferie = !wd && isJourFerie(new Date(teamAnnee, teamMois - 1, j))
+                              const enVacance = !wd && !ferie && vacancesInitiales.some(v => v.date_debut <= ds && v.date_fin >= ds)
                               const ab = teamAbsences.find(a =>
                                 a.nom === emp.nom && a.prenom === emp.prenom &&
                                 a.date_debut <= ds && a.date_fin >= ds
                               )
                               return (
-                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${wd || ferie ? 'bg-slate-50/60' : ''}`}>
+                                <td key={j} className={`w-7 h-7 text-center p-0.5 ${wd || ferie ? 'bg-slate-50/60' : enVacance ? 'bg-orange-100' : ''}`}>
                                   {ab ? (
                                     <div className="w-full h-full flex items-center justify-center text-base leading-none" title={ab.type_absence}>
                                       {absEmoji(ab.type_absence)}

@@ -3,19 +3,8 @@
 import { useState, useTransition, useEffect } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe, JourFerieEntry, VacanceObligatoire } from '@/app/admin/actions'
 import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
-import { sauvegarderJournee } from '@/app/temps/actions'
 import { isJourFerie, formatDateFR } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
-
-// ─── Helpers calendrier / XLS ────────────────────────────────────────────────
-let adminUidSeq = 1
-function defaultHoursAdmin(iso: string): number {
-  const dow = new Date(iso + 'T12:00:00').getDay()
-  if (dow === 5) return 5
-  if (dow === 6) return 0
-  return 7.5
-}
-function parseFR(v: string) { return parseFloat(v.replace(',', '.')) || 0 }
 function daysInMonth(m: number, a: number) { return new Date(a, m, 0).getDate() }
 function isoDay(a: number, m: number, d: number) {
   return `${a}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
@@ -88,17 +77,6 @@ export default function AdminDashboard({
   const [vacFin, setVacFin]     = useState('')
   const [vacNom, setVacNom]     = useState('')
   const [vacMsg, setVacMsg]     = useState<string | null>(null)
-
-  // Modal édition entrée employé (admin)
-  type AdminEditPointe = { uid: number; nom: string; panier: boolean }
-  type AdminEditState = {
-    nom: string; prenom: string; date: string
-    heuresEnPlus: string; heuresEnMoins: string; commentaire: string
-    pointes: AdminEditPointe[]
-  }
-  const [adminEdit, setAdminEdit] = useState<AdminEditState | null>(null)
-  const [adminSaving, setAdminSaving] = useState(false)
-  const [adminMsg, setAdminMsg]     = useState<string | null>(null)
 
   // Sync state quand les props changent (navigation calendrier via router.push)
   useEffect(() => { setMois(moisSelectionne) }, [moisSelectionne])
@@ -219,46 +197,6 @@ export default function AdminDashboard({
       setJoursFeries(prev => prev.map(f => f.date === date ? { ...f, actif: currentActif } : f))
       setFeriesErreur('⚠️ Erreur de sauvegarde. La table jours_feries_override n\'existe peut-être pas encore — exécutez supabase-migration-jours-feries.sql dans Supabase.')
     }
-  }
-
-  // ── Édition entrée employé (admin) ────────────────────────────────────────
-  function ouvrirAdminEdit(emp: Employe, date: string) {
-    const entry = feuillesTempsCalendrier.find(f =>
-      f.nom === emp.nom && f.prenom === emp.prenom && f.date_journee === date
-    )
-    const recup = entry?.heures_a_recuperer ?? 0
-    setAdminMsg(null)
-    setAdminEdit({
-      nom: emp.nom, prenom: emp.prenom, date,
-      heuresEnPlus:  recup > 0 ? String(recup)           : '',
-      heuresEnMoins: recup < 0 ? String(Math.abs(recup)) : '',
-      commentaire: entry?.commentaire ?? '',
-      pointes: (entry?.pointes_bateaux ?? []).map(b => ({ uid: adminUidSeq++, nom: b.nom_bateau, panier: b.panier_repas })),
-    })
-  }
-
-  async function sauvegarderAdminEdit() {
-    if (!adminEdit) return
-    setAdminSaving(true)
-    const enPlus  = parseFR(adminEdit.heuresEnPlus)
-    const enMoins = parseFR(adminEdit.heuresEnMoins)
-    const defH    = defaultHoursAdmin(adminEdit.date)
-    const res = await sauvegarderJournee({
-      nom: adminEdit.nom, prenom: adminEdit.prenom,
-      date_journee: adminEdit.date,
-      heures_travaillees: defH || null,
-      heures_a_recuperer: enPlus - enMoins,
-      commentaire: adminEdit.commentaire.trim() || null,
-      pointes_bateaux: adminEdit.pointes.filter(p => p.nom.trim()).map(p => ({ nom_bateau: p.nom, panier_repas: p.panier })),
-    })
-    if (res.success) {
-      setAdminMsg('✅ Enregistré')
-      router.refresh()
-      setTimeout(() => { setAdminEdit(null); setAdminMsg(null) }, 900)
-    } else {
-      setAdminMsg(`⚠️ ${res.message}`)
-    }
-    setAdminSaving(false)
   }
 
   // ── Vacances obligatoires ──────────────────────────────────────────────────
@@ -674,13 +612,11 @@ export default function AdminDashboard({
                                 a.date_debut <= ds && a.date_fin >= ds
                               )
                               const isAnniv = anniversaireJour === j
-                              const clickableDay = !weekend && !ferie
                               return (
                                 <td
                                   key={j}
-                                  onClick={clickableDay ? () => ouvrirAdminEdit(emp, ds) : undefined}
-                                  className={`w-7 h-7 text-center p-0.5 ${clickableDay ? 'cursor-pointer hover:bg-orange-50 transition-colors' : ''} ${weekend || ferie ? 'bg-slate-50/60' : isAnniv ? '!bg-amber-50' : enVacance ? 'bg-orange-100' : ''}`}
-                                  title={isAnniv ? `🎂 Anniversaire ${emp.prenom}` : clickableDay ? `Modifier ${emp.prenom} ${emp.nom} — ${ds}` : undefined}
+                                  className={`w-7 h-7 text-center p-0.5 ${weekend || ferie ? 'bg-slate-50/60' : isAnniv ? '!bg-amber-50' : enVacance ? 'bg-orange-100' : ''}`}
+                                  title={isAnniv ? `🎂 Anniversaire ${emp.prenom}` : undefined}
                                 >
                                   {ab ? (
                                     <div
@@ -1125,130 +1061,6 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* ====== MODAL ÉDITION ENTRÉE EMPLOYÉ (ADMIN) ====== */}
-      {adminEdit && (
-        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] flex flex-col">
-
-            <div className="flex items-center justify-between px-6 py-4 border-b border-marine-100 flex-shrink-0">
-              <div>
-                <h2 className="text-marine-800 font-bold text-lg">
-                  ✏️ {adminEdit.prenom} {adminEdit.nom}
-                </h2>
-                <p className="text-marine-500 text-sm capitalize">
-                  {new Date(adminEdit.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                </p>
-              </div>
-              <button onClick={() => setAdminEdit(null)} className="p-2 text-marine-400 hover:text-marine-800 hover:bg-marine-100 rounded-lg transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-
-              {adminMsg && (
-                <div className={`p-3 rounded-xl text-sm font-medium ${adminMsg.startsWith('✅') ? 'bg-success-100 text-success-600' : 'bg-danger-100 text-danger-600'}`}>
-                  {adminMsg}
-                </div>
-              )}
-
-              {/* Journée standard */}
-              <div className="flex items-center gap-3 bg-marine-50 rounded-xl px-4 py-3 border border-marine-200">
-                <span className="text-2xl">⏱️</span>
-                <div>
-                  <p className="text-marine-700 font-bold text-sm">Journée standard</p>
-                  <p className="text-marine-800 font-black text-xl">{defaultHoursAdmin(adminEdit.date) || '—'}&nbsp;h</p>
-                </div>
-              </div>
-
-              {/* Récupération */}
-              <div className="space-y-3">
-                <label className="block text-marine-700 font-bold">📊 Récupération</label>
-                <div className="rounded-xl border-2 border-success-600/25 bg-success-100/50 p-3">
-                  <p className="text-success-600 font-semibold text-sm mb-2">⏱ A travaillé plus que prévu</p>
-                  <div className="flex items-center gap-2">
-                    <input type="text" inputMode="decimal"
-                      value={adminEdit.heuresEnPlus}
-                      onChange={e => setAdminEdit(p => p ? { ...p, heuresEnPlus: e.target.value } : p)}
-                      placeholder="0"
-                      className="w-24 border-2 border-success-600/40 rounded-lg px-3 py-2 text-marine-900 text-lg text-center focus:border-success-600 focus:outline-none bg-white"
-                    />
-                    <span className="text-success-600 text-sm">h que l&apos;entreprise doit</span>
-                  </div>
-                </div>
-                <div className="rounded-xl border-2 border-danger-600/25 bg-danger-100/50 p-3">
-                  <p className="text-danger-600 font-semibold text-sm mb-2">⏪ A travaillé moins que prévu</p>
-                  <div className="flex items-center gap-2">
-                    <input type="text" inputMode="decimal"
-                      value={adminEdit.heuresEnMoins}
-                      onChange={e => setAdminEdit(p => p ? { ...p, heuresEnMoins: e.target.value } : p)}
-                      placeholder="0"
-                      className="w-24 border-2 border-danger-600/40 rounded-lg px-3 py-2 text-marine-900 text-lg text-center focus:border-danger-600 focus:outline-none bg-white"
-                    />
-                    <span className="text-danger-600 text-sm">h à rattraper</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pointes */}
-              <div>
-                <label className="block text-marine-700 font-bold mb-2">⛵ Pointes bateau</label>
-                {adminEdit.pointes.length > 0 && (
-                  <div className="space-y-2 mb-2">
-                    {adminEdit.pointes.map(pt => (
-                      <div key={pt.uid} className="flex items-center gap-2 bg-marine-50 rounded-xl p-2.5">
-                        <input type="text" value={pt.nom}
-                          onChange={e => setAdminEdit(p => p ? { ...p, pointes: p.pointes.map(x => x.uid === pt.uid ? { ...x, nom: e.target.value } : x) } : p)}
-                          placeholder="Nom du bateau"
-                          className="flex-1 border-2 border-marine-200 rounded-lg px-3 py-2 text-marine-900 text-sm focus:border-orange-500 focus:outline-none bg-white"
-                        />
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="checkbox" checked={pt.panier}
-                            onChange={e => setAdminEdit(p => p ? { ...p, pointes: p.pointes.map(x => x.uid === pt.uid ? { ...x, panier: e.target.checked } : x) } : p)}
-                            className="w-4 h-4 accent-orange-500"
-                          />
-                          <span className="text-xs text-marine-700">🧺</span>
-                        </label>
-                        <button onClick={() => setAdminEdit(p => p ? { ...p, pointes: p.pointes.filter(x => x.uid !== pt.uid) } : p)}
-                          className="text-danger-500 hover:text-danger-700 p-1">✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button
-                  onClick={() => setAdminEdit(p => p ? { ...p, pointes: [...p.pointes, { uid: adminUidSeq++, nom: '', panier: false }] } : p)}
-                  className="text-marine-500 hover:text-marine-800 text-sm border border-marine-200 hover:border-marine-400 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  + Ajouter un bateau
-                </button>
-              </div>
-
-              {/* Commentaire */}
-              <div>
-                <label className="block text-marine-700 font-bold mb-2">💬 Commentaire</label>
-                <textarea rows={2} value={adminEdit.commentaire}
-                  onChange={e => setAdminEdit(p => p ? { ...p, commentaire: e.target.value } : p)}
-                  placeholder="Optionnel..."
-                  className="w-full border-2 border-marine-200 rounded-xl px-4 py-2 text-marine-900 text-sm focus:border-orange-500 focus:outline-none resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 border-t border-marine-100 flex-shrink-0">
-              <button onClick={() => setAdminEdit(null)}
-                className="flex-1 border-2 border-marine-200 text-marine-600 hover:bg-marine-50 py-3 rounded-xl font-medium transition-colors">
-                Annuler
-              </button>
-              <button onClick={sauvegarderAdminEdit} disabled={adminSaving}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold transition-colors">
-                {adminSaving ? 'Sauvegarde...' : 'Enregistrer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

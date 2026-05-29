@@ -593,8 +593,8 @@ export default function AdminDashboard({
                   dow: new Date(annee, mois - 1, j).toLocaleDateString('fr-FR', { weekday: 'narrow' }) }
               })
 
-              // Anniversaires : jourPris OU date_naissance avec l'année courante
-              const anniversairesParJour = new Map<number, string[]>()
+              // Anniversaire par employé : jourPris OU date_naissance avec l'année courante
+              const anniversaireParEmpId = new Map<string, number>()
               employes.forEach(emp => {
                 const jourPrisDate = emp.jour_anniversaire_pris
                   ? new Date(emp.jour_anniversaire_pris + 'T12:00:00')
@@ -602,9 +602,7 @@ export default function AdminDashboard({
                   ? new Date(`${annee}-${emp.date_naissance.slice(5, 10)}T12:00:00`)
                   : null
                 if (jourPrisDate && jourPrisDate.getMonth() + 1 === mois) {
-                  const j = jourPrisDate.getDate()
-                  if (!anniversairesParJour.has(j)) anniversairesParJour.set(j, [])
-                  anniversairesParJour.get(j)!.push(emp.prenom)
+                  anniversaireParEmpId.set(emp.id, jourPrisDate.getDate())
                 }
               })
 
@@ -640,7 +638,7 @@ export default function AdminDashboard({
                     <div className="flex items-center gap-3 text-xs text-marine-500">
                       <span>🏝️ CP</span><span>🤮 Maladie</span><span>😶 Autre</span>
                       <span className="border-l border-marine-200 pl-3">🟧 Fermeture</span>
-                      <span>🕯️ Anniversaire</span>
+                      <span>🎂 Anniversaire</span>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -661,30 +659,13 @@ export default function AdminDashboard({
                         </tr>
                       </thead>
                       <tbody>
-                        {/* Ligne anniversaires */}
-                        {anniversairesParJour.size > 0 && (
-                          <tr className="border-t border-marine-100 bg-amber-50/40">
-                            <td className="sticky left-0 z-10 bg-amber-50 px-3 py-1.5 font-medium text-amber-700 whitespace-nowrap border-r border-marine-100 text-xs">
-                              🕯️ Anniversaires
-                            </td>
-                            {joursLabel.map(({ j }) => {
-                              const noms = anniversairesParJour.get(j)
-                              return (
-                                <td key={j} className="w-7 h-7 text-center p-0.5">
-                                  {noms && (
-                                    <div className="w-full h-full flex items-center justify-center text-base leading-none" title={noms.join(', ')}>
-                                      🕯️
-                                    </div>
-                                  )}
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        )}
-                        {employes.map(emp => (
+                        {employes.map(emp => {
+                          const anniversaireJour = anniversaireParEmpId.get(emp.id)
+                          return (
                           <tr key={emp.id} className="border-t border-marine-100 hover:bg-marine-50/30">
                             <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-marine-800 whitespace-nowrap border-r border-marine-100">
                               {emp.prenom} {emp.nom}
+                              {anniversaireJour && <span className="ml-1 text-[10px] text-amber-500">🎂</span>}
                             </td>
                             {joursLabel.map(({ j, ds, weekend, ferie, enVacance }) => {
                               const ab = absencesCalendrier.find(a =>
@@ -692,13 +673,14 @@ export default function AdminDashboard({
                                 a.statut !== 'refuse' &&
                                 a.date_debut <= ds && a.date_fin >= ds
                               )
+                              const isAnniv = anniversaireJour === j
                               const clickableDay = !weekend && !ferie
                               return (
                                 <td
                                   key={j}
                                   onClick={clickableDay ? () => ouvrirAdminEdit(emp, ds) : undefined}
-                                  className={`w-7 h-7 text-center p-0.5 ${clickableDay ? 'cursor-pointer hover:bg-orange-50 transition-colors' : ''} ${weekend || ferie ? 'bg-slate-50/60' : enVacance ? 'bg-orange-100' : ''}`}
-                                  title={clickableDay ? `Modifier ${emp.prenom} ${emp.nom} — ${ds}` : undefined}
+                                  className={`w-7 h-7 text-center p-0.5 ${clickableDay ? 'cursor-pointer hover:bg-orange-50 transition-colors' : ''} ${weekend || ferie ? 'bg-slate-50/60' : isAnniv ? '!bg-amber-50' : enVacance ? 'bg-orange-100' : ''}`}
+                                  title={isAnniv ? `🎂 Anniversaire ${emp.prenom}` : clickableDay ? `Modifier ${emp.prenom} ${emp.nom} — ${ds}` : undefined}
                                 >
                                   {ab ? (
                                     <div
@@ -707,6 +689,8 @@ export default function AdminDashboard({
                                     >
                                       {absEmoji(ab.type_absence)}
                                     </div>
+                                  ) : isAnniv ? (
+                                    <div className="w-full h-full flex items-center justify-center text-base leading-none">🎂</div>
                                   ) : (weekend || ferie) ? (
                                     <div className="w-full h-full bg-slate-100/60 rounded" />
                                   ) : null}
@@ -714,7 +698,8 @@ export default function AdminDashboard({
                               )
                             })}
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

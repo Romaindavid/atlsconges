@@ -333,40 +333,10 @@ export default function AdminDashboard({
 
       <div className="max-w-6xl mx-auto px-4 py-6">
 
-        {/* Filtres */}
+        {/* Recherche */}
         <div className="bg-white rounded-2xl shadow-sm p-5 mb-6 border border-marine-100">
-          <h2 className="text-marine-700 font-semibold mb-4 text-sm uppercase tracking-wide">Filtres</h2>
-          <div className="flex flex-wrap gap-3 items-end">
-            {/* Mois */}
-            <div>
-              <label className="block text-marine-600 text-sm mb-1">Mois</label>
-              <select
-                value={mois}
-                onChange={(e) => setMois(parseInt(e.target.value))}
-                className="border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 focus:border-orange-500 focus:outline-none"
-              >
-                {MOIS.map((m, i) => (
-                  <option key={i} value={i + 1}>{m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Année */}
-            <div>
-              <label className="block text-marine-600 text-sm mb-1">Année</label>
-              <select
-                value={annee}
-                onChange={(e) => setAnnee(parseInt(e.target.value))}
-                className="border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 focus:border-orange-500 focus:outline-none"
-              >
-                {anneeOptions.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Recherche salarié */}
-            <div className="flex-1 min-w-48">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
               <label className="block text-marine-600 text-sm mb-1">Nom / Prénom</label>
               <input
                 type="text"
@@ -377,12 +347,11 @@ export default function AdminDashboard({
                 className="w-full border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 placeholder:text-marine-300 focus:border-orange-500 focus:outline-none"
               />
             </div>
-
             <button
               onClick={appliquerFiltres}
               className="bg-marine-700 hover:bg-marine-800 text-white px-5 py-2 rounded-xl font-medium transition-colors"
             >
-              Appliquer
+              Rechercher
             </button>
           </div>
         </div>

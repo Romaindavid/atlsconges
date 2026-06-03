@@ -33,7 +33,7 @@ export default async function AdminPage({
   const q = params.q ?? ''
 
   const [absences, absencesCalendrier, feuillesTemps, feuillesTempsCalendrier, employes, joursFeries, vacances] = await Promise.all([
-    getAbsences(mois, annee, q),
+    getAbsences(undefined, undefined, q),
     getAbsences(mois, annee),
     getFeuillesTemps(mois, annee, q),
     getFeuillesTemps(mois, annee),

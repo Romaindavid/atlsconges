@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe, JourFerieEntry, VacanceObligatoire } from '@/app/admin/actions'
-import { updateAbsenceStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
-import { isJourFerie, formatDateFR } from '@/lib/calcul-jours'
+import { updateAbsenceDatesEtStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
+import { isJourFerie, formatDateFR, calculerJoursOuvres } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 function daysInMonth(m: number, a: number) { return new Date(a, m, 0).getDate() }
 function isoDay(a: number, m: number, d: number) {
@@ -91,6 +91,8 @@ export default function AdminDashboard({
   const [absenceEditId, setAbsenceEditId] = useState<string | null>(null)
   const [statutEdit, setStatutEdit] = useState<'accorde' | 'refuse' | 'en_attente'>('en_attente')
   const [commentaireEdit, setCommentaireEdit] = useState('')
+  const [dateDebutEdit, setDateDebutEdit] = useState('')
+  const [dateFinEdit, setDateFinEdit] = useState('')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
   function appliquerFiltres() {
@@ -105,13 +107,19 @@ export default function AdminDashboard({
     setAbsenceEditId(absence.id)
     setStatutEdit(absence.statut)
     setCommentaireEdit(absence.commentaire_direction || '')
+    setDateDebutEdit(absence.date_debut)
+    setDateFinEdit(absence.date_fin)
     setSaveMsg(null)
   }
+
+  const joursOuvresEdit = dateDebutEdit && dateFinEdit
+    ? calculerJoursOuvres(dateDebutEdit, dateFinEdit, joursFeries.map(f => ({ date: f.date, actif: f.actif })))
+    : 0
 
   async function sauvegarderDecision() {
     if (!absenceEditId) return
     startTransition(async () => {
-      const res = await updateAbsenceStatut(absenceEditId, statutEdit, commentaireEdit)
+      const res = await updateAbsenceDatesEtStatut(absenceEditId, dateDebutEdit, dateFinEdit, statutEdit, commentaireEdit)
       setSaveMsg(res.message)
       if (res.success) {
         setTimeout(() => {
@@ -853,6 +861,27 @@ export default function AdminDashboard({
               </div>
             )}
 
+            {/* Dates */}
+            <div className="mb-4">
+              <label className="block text-marine-700 font-semibold mb-2">Dates</label>
+              <div className="flex items-center gap-2">
+                <input type="date" value={dateDebutEdit}
+                  onChange={e => setDateDebutEdit(e.target.value)}
+                  className="flex-1 border-2 border-marine-200 rounded-xl px-3 py-2.5 text-marine-900 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+                <span className="text-marine-400">→</span>
+                <input type="date" value={dateFinEdit}
+                  onChange={e => setDateFinEdit(e.target.value)}
+                  className="flex-1 border-2 border-marine-200 rounded-xl px-3 py-2.5 text-marine-900 focus:border-orange-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <p className="text-marine-400 text-xs mt-1.5">
+                {joursOuvresEdit > 0
+                  ? `${joursOuvresEdit} jour${joursOuvresEdit > 1 ? 's' : ''} ouvré${joursOuvresEdit > 1 ? 's' : ''}`
+                  : 'Aucun jour ouvré sur cette période'}
+              </p>
+            </div>
+
             {/* Décision */}
             <div className="mb-4">
               <label className="block text-marine-700 font-semibold mb-2">Décision</label>
@@ -902,7 +931,7 @@ export default function AdminDashboard({
               </button>
               <button
                 onClick={sauvegarderDecision}
-                disabled={isPending}
+                disabled={isPending || joursOuvresEdit <= 0}
                 className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold transition-colors"
               >
                 {isPending ? 'Sauvegarde...' : 'Enregistrer'}

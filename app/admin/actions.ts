@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers'
 import { getSupabase } from '@/lib/supabase'
-import { getJoursFeriesAnnee } from '@/lib/calcul-jours'
+import { getJoursFeriesAnnee, calculerJoursOuvres } from '@/lib/calcul-jours'
 
 const COOKIE_NAME = 'atls_admin_auth'
 const COOKIE_MAX_AGE = 60 * 60 * 8 // 8 heures
@@ -92,14 +92,41 @@ export async function getAbsences(
   return data as AbsenceAvecStatut[]
 }
 
-export async function updateAbsenceStatut(
+// Modifie les dates d'une demande (accordée ou non) en plus du statut —
+// permet de rectifier une absence déjà validée si la situation change.
+export async function updateAbsenceDatesEtStatut(
   id: string,
+  date_debut: string,
+  date_fin: string,
   statut: 'accorde' | 'refuse' | 'en_attente',
   commentaire_direction: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!date_debut || !date_fin) {
+    return { success: false, message: 'Dates de début et fin obligatoires.' }
+  }
+  if (new Date(date_fin) < new Date(date_debut)) {
+    return { success: false, message: 'La date de fin ne peut pas être avant la date de début.' }
+  }
+
+  const anneeDebut = Number(date_debut.slice(0, 4))
+  const anneeFin = Number(date_fin.slice(0, 4))
+  const { data: overrides } = await getSupabase()
+    .from('jours_feries_override')
+    .select('date, actif')
+    .gte('date', `${anneeDebut}-01-01`)
+    .lte('date', `${anneeFin}-12-31`)
+
+  const jours_ouvres = calculerJoursOuvres(date_debut, date_fin, (overrides ?? []) as { date: string; actif: boolean }[])
+  if (jours_ouvres <= 0) {
+    return { success: false, message: 'Aucun jour ouvré dans cette période.' }
+  }
+
   const { error } = await getSupabase()
     .from('absences')
     .update({
+      date_debut,
+      date_fin,
+      jours_ouvres,
       statut,
       commentaire_direction: commentaire_direction.trim() || null,
       date_decision: new Date().toISOString(),
@@ -107,10 +134,10 @@ export async function updateAbsenceStatut(
     .eq('id', id)
 
   if (error) {
-    console.error('Erreur updateAbsenceStatut:', error)
+    console.error('Erreur updateAbsenceDatesEtStatut:', error)
     return { success: false, message: 'Erreur lors de la mise à jour.' }
   }
-  return { success: true, message: 'Statut mis à jour.' }
+  return { success: true, message: 'Demande mise à jour.' }
 }
 
 // --- Feuilles de temps ---

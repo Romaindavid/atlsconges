@@ -42,6 +42,13 @@ Créer `.env.local` à la racine :
 NEXT_PUBLIC_SUPABASE_URL=https://VOTRE_PROJECT_ID.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=VOTRE_ANON_KEY
 ADMIN_PASSWORD=votre_mot_de_passe_admin
+
+# Optionnel : notification par e-mail à la direction à chaque nouvelle demande d'absence
+# Créer un compte sur https://resend.com, vérifier un domaine d'envoi, récupérer une clé API
+RESEND_API_KEY=re_xxx
+RESEND_FROM_EMAIL=notifications@votredomaine.fr
+ADMIN_NOTIFICATION_EMAIL=clairemarie@atlantiquesellerie.com
+NEXT_PUBLIC_SITE_URL=https://votre-app.vercel.app
 ```
 
 ### 4. Lancer en développement

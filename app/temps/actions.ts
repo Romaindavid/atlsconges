@@ -93,7 +93,11 @@ export async function sauvegarderJournee(
       console.error('Erreur update feuille:', error)
       return { success: false, message: 'Erreur lors de la mise à jour.' }
     }
-    await supabase.from('pointes_bateaux').delete().eq('feuille_temps_id', feuilleId)
+    const { error: deleteError } = await supabase.from('pointes_bateaux').delete().eq('feuille_temps_id', feuilleId)
+    if (deleteError) {
+      console.error('Erreur suppression pointes:', deleteError)
+      return { success: false, message: 'Erreur lors de la mise à jour des pointes bateau.' }
+    }
   } else {
     const { data: newFeuille, error } = await supabase
       .from('feuilles_temps')

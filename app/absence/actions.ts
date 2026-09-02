@@ -1,6 +1,8 @@
 'use server'
 
 import { getSupabase } from '@/lib/supabase'
+import { envoyerEmail } from '@/lib/email'
+import { formatDateFR } from '@/lib/calcul-jours'
 
 export type AbsenceFormData = {
   nom: string
@@ -60,6 +62,24 @@ export async function soumettreAbsence(data: AbsenceFormData): Promise<ActionRes
       message: 'Une erreur est survenue lors de l\'enregistrement. Veuillez réessayer.',
     }
   }
+
+  // Best-effort : ne doit jamais faire échouer la demande du salarié.
+  // Awaité pour garantir l'envoi avant la fin de la fonction serverless.
+  const destinataire = process.env.ADMIN_NOTIFICATION_EMAIL || 'clairemarie@atlantiquesellerie.com'
+  await envoyerEmail({
+    to: destinataire,
+    subject: `Nouvelle demande d'absence — ${data.prenom} ${data.nom}`,
+    html: `
+      <p><strong>${data.prenom} ${data.nom}</strong> vient de déposer une demande d'absence.</p>
+      <ul>
+        <li>Type : ${data.type_absence}${data.type_absence_detail ? ` — ${data.type_absence_detail}` : ''}</li>
+        <li>Du ${formatDateFR(data.date_debut)} au ${formatDateFR(data.date_fin)}</li>
+        <li>${data.jours_ouvres} jour${data.jours_ouvres > 1 ? 's' : ''} ouvré${data.jours_ouvres > 1 ? 's' : ''}</li>
+        ${data.commentaire_salarie ? `<li>Commentaire : ${data.commentaire_salarie}</li>` : ''}
+      </ul>
+      <p><a href="${process.env.NEXT_PUBLIC_SITE_URL || ''}/admin">Traiter la demande</a></p>
+    `,
+  })
 
   return {
     success: true,

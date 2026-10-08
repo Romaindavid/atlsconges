@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe, JourFerieEntry, VacanceObligatoire } from '@/app/admin/actions'
 import { updateAbsenceDatesEtStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
-import { isJourFerie, formatDateFR, calculerJoursOuvres } from '@/lib/calcul-jours'
+import { isJourFerie, formatDateFR, calculerJoursOuvres, libelleDuree } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 function daysInMonth(m: number, a: number) { return new Date(a, m, 0).getDate() }
 function isoDay(a: number, m: number, d: number) {
@@ -89,6 +89,7 @@ export default function AdminDashboard({
 
   // Modal décision absence
   const [absenceEditId, setAbsenceEditId] = useState<string | null>(null)
+  const [demiJourneeEdit, setDemiJourneeEdit] = useState<string | null>(null)
   const [statutEdit, setStatutEdit] = useState<'accorde' | 'refuse' | 'en_attente'>('en_attente')
   const [commentaireEdit, setCommentaireEdit] = useState('')
   const [dateDebutEdit, setDateDebutEdit] = useState('')
@@ -105,6 +106,7 @@ export default function AdminDashboard({
 
   function ouvrirModal(absence: AbsenceAvecStatut) {
     setAbsenceEditId(absence.id)
+    setDemiJourneeEdit(absence.demi_journee ?? null)
     setStatutEdit(absence.statut)
     setCommentaireEdit(absence.commentaire_direction || '')
     setDateDebutEdit(absence.date_debut)
@@ -112,7 +114,11 @@ export default function AdminDashboard({
     setSaveMsg(null)
   }
 
-  const joursOuvresEdit = dateDebutEdit && dateFinEdit
+  // Même règle que updateAbsenceDatesEtStatut : la demi-journée tient tant que l'absence est sur un seul jour
+  const demiJourneeEffective = demiJourneeEdit && dateDebutEdit === dateFinEdit ? demiJourneeEdit : null
+  const joursOuvresEdit = demiJourneeEffective
+    ? 0.5
+    : dateDebutEdit && dateFinEdit
     ? calculerJoursOuvres(dateDebutEdit, dateFinEdit, joursFeries.map(f => ({ date: f.date, actif: f.actif })))
     : 0
 
@@ -448,7 +454,7 @@ export default function AdminDashboard({
                             Du {formatDateFR(absence.date_debut)} au {formatDateFR(absence.date_fin)}
                           </p>
                           <p className="text-marine-500 text-sm">
-                            {absence.jours_ouvres} jour{absence.jours_ouvres > 1 ? 's' : ''} ouvré{absence.jours_ouvres > 1 ? 's' : ''}
+                            {libelleDuree(absence.jours_ouvres, absence.demi_journee)}
                           </p>
                           <p className="text-marine-400 text-xs mt-0.5">
                             Demande du {formatDateFR(absence.date_demande.split('T')[0])}
@@ -598,9 +604,9 @@ export default function AdminDashboard({
                                   {ab ? (
                                     <div
                                       className={`w-full h-full flex items-center justify-center text-base leading-none ${ab.statut === 'en_attente' ? 'opacity-50' : ''}`}
-                                      title={`${ab.type_absence}${ab.statut === 'en_attente' ? ' (en attente)' : ''}`}
+                                      title={`${ab.type_absence}${ab.demi_journee ? ` — ${libelleDuree(0.5, ab.demi_journee)}` : ''}${ab.statut === 'en_attente' ? ' (en attente)' : ''}`}
                                     >
-                                      {absEmoji(ab.type_absence)}
+                                      {absEmoji(ab.type_absence)}{ab.demi_journee && <span className="text-[9px] font-bold text-marine-500">½</span>}
                                     </div>
                                   ) : isAnniv ? (
                                     <div className="w-full h-full flex items-center justify-center text-base leading-none">🎂</div>
@@ -877,7 +883,7 @@ export default function AdminDashboard({
               </div>
               <p className="text-marine-400 text-xs mt-1.5">
                 {joursOuvresEdit > 0
-                  ? `${joursOuvresEdit} jour${joursOuvresEdit > 1 ? 's' : ''} ouvré${joursOuvresEdit > 1 ? 's' : ''}`
+                  ? libelleDuree(joursOuvresEdit, demiJourneeEffective)
                   : 'Aucun jour ouvré sur cette période'}
               </p>
             </div>

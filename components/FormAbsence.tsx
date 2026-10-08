@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { calculerJoursOuvres, dateAujourdhui } from '@/lib/calcul-jours'
+import { calculerJoursOuvres, dateAujourdhui, DEMI_JOURNEES, demiJourneePossible } from '@/lib/calcul-jours'
+import type { DemiJournee } from '@/lib/calcul-jours'
 import { soumettreAbsence } from '@/app/absence/actions'
 
 const TYPES_ABSENCE = ['Congés payés', 'Maladie', 'Autre (précisez...)']
@@ -19,6 +20,7 @@ export default function FormAbsence({ employe }: Props) {
   const [dateFin, setDateFin] = useState('')
   const [joursOuvres, setJoursOuvres] = useState<number>(0)
   const [joursManuel, setJoursManuel] = useState(false)
+  const [duree, setDuree] = useState<'journee' | DemiJournee>('journee')
   const [commentaire, setCommentaire] = useState('')
   const [certifie, setCertifie] = useState(false)
   const [dateAujourdhui_] = useState(dateAujourdhui())
@@ -32,6 +34,10 @@ export default function FormAbsence({ employe }: Props) {
       setJoursOuvres(calculerJoursOuvres(dateDebut, dateFin))
     }
   }, [dateDebut, dateFin, joursManuel])
+
+  // Demi-journée possible uniquement sur une absence d'un seul jour, du lundi au jeudi
+  const unSeulJour = !!dateDebut && dateDebut === dateFin && demiJourneePossible(dateDebut)
+  const demiJournee: DemiJournee | null = unSeulJour && duree !== 'journee' ? duree : null
 
   const nomComplet = `${employe.prenom} ${employe.nom}`
 
@@ -51,7 +57,8 @@ export default function FormAbsence({ employe }: Props) {
       type_absence_detail: typeDetail,
       date_debut: dateDebut,
       date_fin: dateFin,
-      jours_ouvres: joursOuvres,
+      jours_ouvres: demiJournee ? 0.5 : joursOuvres,
+      demi_journee: demiJournee,
       commentaire_salarie: commentaire,
     })
 
@@ -166,7 +173,36 @@ export default function FormAbsence({ employe }: Props) {
               />
             </div>
 
+            {/* Durée : journée entière ou demi-journée (absence d'un seul jour) */}
+            {unSeulJour && (
+              <div className="sm:col-span-2">
+                <span className="block text-marine-700 font-semibold mb-2">
+                  Durée <span className="text-danger-600">*</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {([
+                    ['journee', 'Journée entière'],
+                    ['matin', DEMI_JOURNEES.matin.label],
+                    ['apres_midi', DEMI_JOURNEES.apres_midi.label],
+                  ] as const).map(([val, label]) => (
+                    <label key={val}
+                      className={`flex items-center gap-2 border-2 rounded-xl px-4 py-3 cursor-pointer transition-colors ${
+                        duree === val ? 'border-orange-500 bg-orange-50 text-marine-900' : 'border-marine-200 text-marine-700 hover:border-marine-300'
+                      }`}>
+                      <input type="radio" name="duree" value={val}
+                        checked={duree === val}
+                        onChange={() => setDuree(val)}
+                        className="accent-orange-500"
+                      />
+                      <span className="font-medium">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Jours ouvrés */}
+            {!demiJournee && (
             <div className="sm:col-span-2">
               <label htmlFor="joursOuvres" className="block text-marine-700 font-semibold mb-2">
                 Nombre de jours ouvrés <span className="text-danger-600">*</span>
@@ -201,6 +237,7 @@ export default function FormAbsence({ employe }: Props) {
                 Jours du lundi au vendredi (hors week-ends). Modifiable si nécessaire.
               </p>
             </div>
+            )}
           </div>
         </section>
 

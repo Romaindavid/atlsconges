@@ -86,6 +86,7 @@ export type AbsenceEmploye = {
   date_debut: string
   date_fin: string
   jours_ouvres: number
+  demi_journee?: 'matin' | 'apres_midi' | null
   commentaire_salarie: string | null
   date_demande: string
   statut: 'en_attente' | 'accorde' | 'refuse'
@@ -121,6 +122,7 @@ export type AbsenceEquipe = {
   type_absence: string
   date_debut: string
   date_fin: string
+  demi_journee?: 'matin' | 'apres_midi' | null
 }
 
 export async function getAbsencesEquipe(mois: number, annee: number): Promise<AbsenceEquipe[]> {
@@ -129,13 +131,21 @@ export async function getAbsencesEquipe(mois: number, annee: number): Promise<Ab
   const dateFinMois = `${annee}-${String(mois).padStart(2, '0')}-${String(dernierJour).padStart(2, '0')}`
   const { data, error } = await getSupabase()
     .from('absences')
-    .select('nom, prenom, type_absence, date_debut, date_fin')
+    .select('*')
     .eq('statut', 'accorde')
     .lte('date_debut', dateFinMois)
     .gte('date_fin', dateDebutMois)
     .order('date_debut', { ascending: true })
   if (error) return []
-  return data as AbsenceEquipe[]
+  // Ne renvoie au navigateur que les champs du planning (pas les commentaires des collègues)
+  return (data as (AbsenceEquipe & Record<string, unknown>)[]).map(a => ({
+    nom: a.nom,
+    prenom: a.prenom,
+    type_absence: a.type_absence,
+    date_debut: a.date_debut,
+    date_fin: a.date_fin,
+    demi_journee: a.demi_journee ?? null,
+  }))
 }
 
 export type EmployeNom = { id: string; nom: string; prenom: string }
@@ -155,7 +165,7 @@ export async function getAbsencesEmployee(
 ): Promise<AbsenceEmploye[]> {
   const { data, error } = await getSupabase()
     .from('absences')
-    .select('id, type_absence, type_absence_detail, date_debut, date_fin, jours_ouvres, commentaire_salarie, date_demande, statut, commentaire_direction')
+    .select('*')
     .eq('nom', nom)
     .eq('prenom', prenom)
     .order('date_demande', { ascending: false })

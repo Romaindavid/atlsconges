@@ -28,6 +28,7 @@ export type Absence = {
   date_debut: string
   date_fin: string
   jours_ouvres: number
+  demi_journee?: 'matin' | 'apres_midi' | null
   commentaire_salarie: string | null
   date_demande: string
   statut: 'en_attente' | 'accorde' | 'refuse'

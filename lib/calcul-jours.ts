@@ -98,3 +98,38 @@ export function formatDateFR(dateISO: string): string {
 export function dateAujourdhui(): string {
   return new Date().toISOString().split('T')[0]
 }
+
+// ─── Demi-journées ────────────────────────────────────────────────────────────
+// Horaires ATLS : lundi → jeudi matin 8h–12h (4h), après-midi 12h45–16h15 (3,5h)
+// Le vendredi (7h30–12h30) ne compte qu'une matinée : pas de demi-journée possible.
+export type DemiJournee = 'matin' | 'apres_midi'
+
+export const DEMI_JOURNEES: Record<DemiJournee, { label: string; heures: number }> = {
+  matin:      { label: 'Matin (8h – 12h)',            heures: 4   },
+  apres_midi: { label: 'Après-midi (12h45 – 16h15)',  heures: 3.5 },
+}
+
+/** Demi-journée posable ce jour-là ? (lundi → jeudi uniquement) */
+export function demiJourneePossible(dateISO: string): boolean {
+  const dow = parseISO(dateISO).getDay()
+  return dow >= 1 && dow <= 4
+}
+
+/** "½ journée (matin)" ou "3 jours ouvrés" */
+export function libelleDuree(joursOuvres: number, demiJournee?: string | null): string {
+  if (demiJournee === 'matin') return '½ journée (matin)'
+  if (demiJournee === 'apres_midi') return '½ journée (après-midi)'
+  return `${joursOuvres} jour${joursOuvres > 1 ? 's' : ''} ouvré${joursOuvres > 1 ? 's' : ''}`
+}
+
+// ─── Absences et compteur de récupération ────────────────────────────────────
+/**
+ * Un jour couvert par une absence accordée en journée entière (congés, maladie, autre…)
+ * n'a aucun impact sur le compteur de récupération, même si une saisie existe ce jour-là
+ * (ex : « j'ai travaillé moins » saisi avant que l'absence soit validée).
+ */
+export type AbsencePourRecup = { date_debut: string; date_fin: string; demi_journee?: string | null }
+
+export function estJourAbsenceComplete(absences: AbsencePourRecup[], iso: string): boolean {
+  return absences.some(a => !a.demi_journee && a.date_debut <= iso && a.date_fin >= iso)
+}

@@ -6,7 +6,7 @@ import { changeEmployee, getAbsencesEquipe } from '@/app/actions'
 import type { AbsenceEmploye, AbsenceEquipe, EmployeNom } from '@/app/actions'
 import { getJoursFeriesOverrides } from '@/app/temps/actions'
 import type { JourneeEntry, JourFerieOverride, VacancePeriode } from '@/app/temps/actions'
-import { formatDateFR, isJourFerie } from '@/lib/calcul-jours'
+import { formatDateFR, isJourFerie, libelleDuree } from '@/lib/calcul-jours'
 import FeuilleTempsCore from '@/components/FeuilleTempsCore'
 
 // ─── Helpers calendrier ───────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ export default function EmployeeDashboard({
 
   const absencesAccordees = absences
     .filter(a => a.statut === 'accorde')
-    .map(a => ({ date_debut: a.date_debut, date_fin: a.date_fin, type_absence: a.type_absence }))
+    .map(a => ({ date_debut: a.date_debut, date_fin: a.date_fin, type_absence: a.type_absence, demi_journee: a.demi_journee ?? null }))
 
   return (
     <div className="min-h-screen flex flex-col bg-marine-50">
@@ -179,7 +179,7 @@ export default function EmployeeDashboard({
                               <p className="text-marine-600 text-sm mt-0.5">
                                 Du {formatDateFR(abs.date_debut)} au {formatDateFR(abs.date_fin)}
                                 <span className="text-marine-500 ml-2">
-                                  ({abs.jours_ouvres} j. ouvré{abs.jours_ouvres > 1 ? 's' : ''})
+                                  ({libelleDuree(abs.jours_ouvres, abs.demi_journee)})
                                 </span>
                               </p>
                               <p className="text-marine-500 text-xs mt-0.5">
@@ -290,8 +290,8 @@ export default function EmployeeDashboard({
                               return (
                                 <td key={j} className={`w-7 h-7 text-center p-0.5 ${wd || ferie ? 'bg-slate-50/60' : enVacance ? 'bg-orange-100' : ''}`}>
                                   {ab ? (
-                                    <div className="w-full h-full flex items-center justify-center text-base leading-none" title={ab.type_absence}>
-                                      {absEmoji(ab.type_absence)}
+                                    <div className="w-full h-full flex items-center justify-center text-base leading-none" title={`${ab.type_absence}${ab.demi_journee ? ` — ${libelleDuree(0.5, ab.demi_journee)}` : ''}`}>
+                                      {absEmoji(ab.type_absence)}{ab.demi_journee && <span className="text-[9px] font-bold text-marine-500">½</span>}
                                     </div>
                                   ) : (wd || ferie) ? (
                                     <div className="w-full h-full bg-slate-100/60 rounded" />

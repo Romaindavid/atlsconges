@@ -31,7 +31,7 @@ npm install
 ### 2. Configurer Supabase
 
 1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Aller dans **SQL Editor** et exécuter le contenu de `supabase-schema.sql`
+2. Aller dans **SQL Editor** et exécuter le contenu de `supabase-schema.sql`, puis les fichiers `supabase-migration-*.sql` (dont `supabase-migration-demi-journee.sql` pour les demi-journées d'absence)
 3. Récupérer les clés API dans **Settings > API**
 
 ### 3. Variables d'environnement

@@ -4,7 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { getFeuillesMois, sauvegarderJournee, getSoldeRecupComplet, getJoursFeriesOverrides } from '@/app/temps/actions'
 import type { JourneeEntry, JourFerieOverride, VacancePeriode } from '@/app/temps/actions'
-import { isJourFerie } from '@/lib/calcul-jours'
+import { isJourFerie, estJourAbsenceComplete, DEMI_JOURNEES, libelleDuree } from '@/lib/calcul-jours'
+import type { DemiJournee } from '@/lib/calcul-jours'
 
 // Emoji par type d'absence
 function absEmoji(type: string) {
@@ -73,7 +74,7 @@ let uidSeq = 1
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Employe = { id: string; nom: string; prenom: string }
-export type AbsenceAccordee = { date_debut: string; date_fin: string; type_absence: string }
+export type AbsenceAccordee = { date_debut: string; date_fin: string; type_absence: string; demi_journee?: DemiJournee | null }
 export type Props = {
   employe: Employe
   entriesInitiales: JourneeEntry[]
@@ -101,6 +102,19 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
   const weeks = getWeeksOfMonth(annee, mois)
   const byDate = new Map(entries.map(e => [e.date_journee, e]))
 
+  // Absence accordée sur une demi-journée ce jour-là (null si aucune / journée entière)
+  const demiAbsence = (iso: string) =>
+    absencesAccordees.find(a => a.demi_journee && a.date_debut <= iso && a.date_fin >= iso) ?? null
+  // Heures prévues du jour, demi-journée d'absence déduite
+  const heuresStandard = (iso: string) => {
+    const defH = parseFloat(defaultHours(iso)) || 0
+    const demi = demiAbsence(iso)
+    return demi?.demi_journee ? Math.max(0, defH - DEMI_JOURNEES[demi.demi_journee].heures) : defH
+  }
+  // Les saisies d'un jour d'absence complète ne comptent pas dans la récup
+  const recupDe = (e: JourneeEntry) =>
+    estJourAbsenceComplete(absencesAccordees, e.date_journee) ? 0 : (e.heures_a_recuperer ?? 0)
+
   // Heures effectives par jour : DB si enregistré, sinon heures standard (hors WE/férié/absence/futur)
   const dailyEffectiveMap = new Map<string, number>()
   weeks.forEach(week => {
@@ -111,17 +125,15 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
       if (dow === 0 || dow === 6) return
       const ferie = (() => { const ov = feriesOv.find(o => o.date === iso); return ov !== undefined ? ov.actif : isJourFerie(jour) })()
       if (ferie) return
-      if (absencesAccordees.find(a => a.date_debut <= iso && a.date_fin >= iso)) return
+      if (estJourAbsenceComplete(absencesAccordees, iso)) return
       const entry = byDate.get(iso)
-      dailyEffectiveMap.set(iso, entry
-        ? (entry.heures_travaillees ?? 0) + (entry.heures_a_recuperer ?? 0)
-        : parseFloat(defaultHours(iso)) || 0
-      )
+      const base = demiAbsence(iso) ? heuresStandard(iso) : (entry?.heures_travaillees ?? heuresStandard(iso))
+      dailyEffectiveMap.set(iso, base + (entry?.heures_a_recuperer ?? 0))
     })
   })
 
   const totalHeures  = [...dailyEffectiveMap.values()].reduce((s, h) => s + h, 0)
-  const totalRecup   = entries.reduce((s, e) => s + (e.heures_a_recuperer  ?? 0), 0)
+  const totalRecup   = entries.reduce((s, e) => s + recupDe(e), 0)
   const totalPointes = entries.reduce((s, e) => s + (e.pointes_bateaux?.length ?? 0), 0)
 
   async function changerMois(delta: number) {
@@ -163,7 +175,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
     const parseFR = (v: string) => parseFloat(v.replace(',', '.')) || 0
     const enPlus  = parseFR(editState.heuresEnPlus)
     const enMoins = parseFR(editState.heuresEnMoins)
-    const defaultH = parseFloat(defaultHours(editState.date)) || null
+    const defaultH = heuresStandard(editState.date) || null
     const res = await sauvegarderJournee({
       nom: employe.nom, prenom: employe.prenom,
       date_journee: editState.date,
@@ -242,7 +254,7 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                 const inMonthDays = week.days.filter(d => d.getMonth() + 1 === mois)
                 const weekEntries = inMonthDays.map(d => byDate.get(dateToISO(d))).filter(Boolean) as JourneeEntry[]
                 const weekHeures  = inMonthDays.reduce((s, d) => s + (dailyEffectiveMap.get(dateToISO(d)) ?? 0), 0)
-                const weekRecup   = weekEntries.reduce((s, e) => s + (e.heures_a_recuperer  ?? 0), 0)
+                const weekRecup   = weekEntries.reduce((s, e) => s + recupDe(e), 0)
                 const weekPointes = weekEntries.flatMap(e => e.pointes_bateaux ?? [])
 
                 return (
@@ -264,12 +276,13 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                       const entry    = byDate.get(iso)
                       const enVacance = inMonth && !ferie && vacances.some(v => v.date_debut <= iso && v.date_fin >= iso)
                       const absence  = inMonth && !ferie
-                        ? absencesAccordees.find(a => a.date_debut <= iso && a.date_fin >= iso) ?? null
+                        ? absencesAccordees.find(a => !a.demi_journee && a.date_debut <= iso && a.date_fin >= iso) ?? null
                         : null
+                      const demi     = inMonth && !ferie ? demiAbsence(iso) : null
                       const clickable = inMonth && !ferie && !absence
-                      const defH     = parseFloat(defaultHours(iso)) || 0
+                      const defH     = heuresStandard(iso)
                       const effectif = entry
-                        ? (entry.heures_travaillees ?? defH) + (entry.heures_a_recuperer ?? 0)
+                        ? (demi ? defH : (entry.heures_travaillees ?? defH)) + (entry.heures_a_recuperer ?? 0)
                         : null
                       const jourNum  = jour.getDate()
 
@@ -294,6 +307,11 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                               isToday ? 'text-orange-500' : ferie ? 'text-slate-400' : absence ? 'text-marine-400' : 'text-marine-300'
                             }`}>
                               {jourNum}
+                              {demi && (
+                                <span className="ml-0.5" title={`${demi.type_absence} — ${libelleDuree(0.5, demi.demi_journee)}`}>
+                                  {absEmoji(demi.type_absence)}½
+                                </span>
+                              )}
                             </div>
                           )}
 
@@ -457,11 +475,13 @@ export default function FeuilleTempsCore({ employe, entriesInitiales, moisInitia
                 <div>
                   <p className="text-marine-700 font-bold text-sm">Journée standard</p>
                   <p className="text-marine-800 font-black text-xl">
-                    {defaultHours(editState.date) || '—'}&nbsp;h
+                    {heuresStandard(editState.date) ? fmt(heuresStandard(editState.date)) : '—'}&nbsp;h
                   </p>
                 </div>
                 <p className="text-marine-400 text-xs ml-auto text-right">
-                  Pré-rempli<br/>automatiquement
+                  {demiAbsence(editState.date)
+                    ? <>Absence {libelleDuree(0.5, demiAbsence(editState.date)!.demi_journee)}<br/>déduite</>
+                    : <>Pré-rempli<br/>automatiquement</>}
                 </p>
               </div>
 

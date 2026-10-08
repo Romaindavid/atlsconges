@@ -52,6 +52,7 @@ export type AbsenceAvecStatut = {
   date_debut: string
   date_fin: string
   jours_ouvres: number
+  demi_journee?: 'matin' | 'apres_midi' | null
   commentaire_salarie: string | null
   date_demande: string
   statut: 'en_attente' | 'accorde' | 'refuse'
@@ -116,7 +117,18 @@ export async function updateAbsenceDatesEtStatut(
     .gte('date', `${anneeDebut}-01-01`)
     .lte('date', `${anneeFin}-12-31`)
 
-  const jours_ouvres = calculerJoursOuvres(date_debut, date_fin, (overrides ?? []) as { date: string; actif: boolean }[])
+  // Une demi-journée reste une demi-journée tant que l'absence tient sur un seul jour
+  const { data: existante } = await getSupabase()
+    .from('absences')
+    .select('*')
+    .eq('id', id)
+    .single()
+  const demi = (existante as { demi_journee?: string | null } | null)?.demi_journee ?? null
+  const garderDemi = !!demi && date_debut === date_fin
+
+  const jours_ouvres = garderDemi
+    ? 0.5
+    : calculerJoursOuvres(date_debut, date_fin, (overrides ?? []) as { date: string; actif: boolean }[])
   if (jours_ouvres <= 0) {
     return { success: false, message: 'Aucun jour ouvré dans cette période.' }
   }
@@ -127,6 +139,7 @@ export async function updateAbsenceDatesEtStatut(
       date_debut,
       date_fin,
       jours_ouvres,
+      ...(demi && !garderDemi ? { demi_journee: null } : {}),
       statut,
       commentaire_direction: commentaire_direction.trim() || null,
       date_decision: new Date().toISOString(),

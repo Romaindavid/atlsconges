@@ -1,6 +1,8 @@
 'use server'
 
 import { getSupabase } from '@/lib/supabase'
+import { estJourAbsenceComplete } from '@/lib/calcul-jours'
+import type { AbsencePourRecup } from '@/lib/calcul-jours'
 
 export type PointeBateauInput = {
   nom_bateau: string
@@ -165,10 +167,10 @@ export async function getSoldeRecupComplet(
   employeId: string
 ): Promise<number> {
   const supabase = getSupabase()
-  const [feuillesRes, empRes] = await Promise.all([
+  const [feuillesRes, empRes, absencesRes] = await Promise.all([
     supabase
       .from('feuilles_temps')
-      .select('heures_a_recuperer')
+      .select('date_journee, heures_a_recuperer')
       .eq('nom', nom)
       .eq('prenom', prenom),
     supabase
@@ -176,10 +178,17 @@ export async function getSoldeRecupComplet(
       .select('solde_depart_recuperation')
       .eq('id', employeId)
       .single(),
+    supabase
+      .from('absences')
+      .select('*')
+      .eq('nom', nom)
+      .eq('prenom', prenom)
+      .eq('statut', 'accorde'),
   ])
-  const totalRecup = (feuillesRes.data ?? []).reduce(
-    (s: number, e: { heures_a_recuperer: number }) => s + (e.heures_a_recuperer ?? 0), 0
-  )
+  const absences = (absencesRes.data ?? []) as AbsencePourRecup[]
+  const totalRecup = (feuillesRes.data ?? [])
+    .filter((e: { date_journee: string }) => !estJourAbsenceComplete(absences, e.date_journee))
+    .reduce((s: number, e: { heures_a_recuperer: number }) => s + (e.heures_a_recuperer ?? 0), 0)
   const soldeDepart = (empRes.data as { solde_depart_recuperation?: number } | null)?.solde_depart_recuperation ?? 0
   return Number((soldeDepart + totalRecup).toFixed(2))
 }

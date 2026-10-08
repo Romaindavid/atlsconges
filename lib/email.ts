@@ -36,6 +36,7 @@ export async function envoyerEmail(params: {
       console.error('Erreur envoi email Resend:', res.status, body)
       return { success: false, message: 'Erreur envoi email.' }
     }
+    console.log('Email envoyé à', params.to, '—', params.subject)
     return { success: true }
   } catch (err) {
     console.error('Erreur envoi email:', err)

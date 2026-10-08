@@ -1,6 +1,7 @@
 import { isEmployeeAuthenticated, getEmployeeSession, getAbsencesEmployee, getAbsencesEquipe, getEmployeNoms } from './actions'
 import { getFeuillesMois, getSoldeRecupComplet, getJoursFeriesOverrides, getVacancesObligatoires } from './temps/actions'
 import { getEmployes } from './admin/actions'
+import { dateAujourdhui, presentSurPeriode } from '@/lib/calcul-jours'
 import EmployeePasswordForm from '@/components/EmployeePasswordForm'
 import EmployeeNameSelect from '@/components/EmployeeNameSelect'
 import EmployeeDashboard from '@/components/EmployeeDashboard'
@@ -18,7 +19,8 @@ export default async function HomePage() {
   const employee = await getEmployeeSession()
   if (!employee) {
     const employes = await getEmployes()
-    return <EmployeeNameSelect employes={employes.map(e => ({
+    const aujourdhui = dateAujourdhui()
+    return <EmployeeNameSelect employes={employes.filter(e => presentSurPeriode(e, aujourdhui, aujourdhui)).map(e => ({
       id: e.id,
       nom: e.nom,
       prenom: e.prenom,

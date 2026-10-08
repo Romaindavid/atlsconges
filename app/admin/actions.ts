@@ -217,6 +217,8 @@ export type Employe = {
   code_pin: string | null
   date_naissance: string | null
   jour_anniversaire_pris: string | null
+  date_entree?: string | null
+  date_sortie?: string | null
 }
 
 export async function getEmployes(): Promise<Employe[]> {
@@ -235,14 +237,25 @@ export async function getEmployes(): Promise<Employe[]> {
 
 export async function createEmploye(
   nom: string,
-  prenom: string
+  prenom: string,
+  options: { solde_depart_recuperation?: number; date_entree?: string | null; date_sortie?: string | null } = {}
 ): Promise<{ success: boolean; message: string }> {
   if (!nom.trim() || !prenom.trim()) {
     return { success: false, message: 'Nom et prénom sont obligatoires.' }
   }
+  if (options.date_entree && options.date_sortie && options.date_sortie < options.date_entree) {
+    return { success: false, message: "La date de départ ne peut pas être avant la date d'arrivée." }
+  }
   const { error } = await getSupabase()
     .from('employes')
-    .insert({ nom: nom.trim().toUpperCase(), prenom: prenom.trim() })
+    .insert({
+      nom: nom.trim().toUpperCase(),
+      prenom: prenom.trim(),
+      solde_depart_recuperation: options.solde_depart_recuperation ?? 0,
+      // Colonnes ajoutées par supabase-migration-entree-sortie.sql : envoyées seulement si renseignées
+      ...(options.date_entree ? { date_entree: options.date_entree } : {}),
+      ...(options.date_sortie ? { date_sortie: options.date_sortie } : {}),
+    })
 
   if (error) return { success: false, message: 'Erreur lors de la création.' }
   return { success: true, message: 'Employé ajouté.' }
@@ -335,6 +348,24 @@ export async function setJourFerieOverride(
     .from('jours_feries_override')
     .upsert({ date, actif }, { onConflict: 'date' })
   return { success: !error }
+}
+
+// ─── Arrivée / départ ─────────────────────────────────────────────────────────
+
+export async function setDatesEmploi(
+  id: string,
+  dateEntree: string | null,
+  dateSortie: string | null
+): Promise<{ success: boolean; message: string }> {
+  if (dateEntree && dateSortie && dateSortie < dateEntree) {
+    return { success: false, message: "La date de départ ne peut pas être avant la date d'arrivée." }
+  }
+  const { error } = await getSupabase()
+    .from('employes')
+    .update({ date_entree: dateEntree || null, date_sortie: dateSortie || null })
+    .eq('id', id)
+  if (error) return { success: false, message: "Erreur lors de l'enregistrement des dates d'arrivée/départ." }
+  return { success: true, message: 'Dates enregistrées.' }
 }
 
 // ─── PIN employé ──────────────────────────────────────────────────────────────

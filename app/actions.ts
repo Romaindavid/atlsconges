@@ -148,15 +148,19 @@ export async function getAbsencesEquipe(mois: number, annee: number): Promise<Ab
   }))
 }
 
-export type EmployeNom = { id: string; nom: string; prenom: string }
+export type EmployeNom = { id: string; nom: string; prenom: string; date_entree?: string | null; date_sortie?: string | null }
 
 export async function getEmployeNoms(): Promise<EmployeNom[]> {
   const { data } = await getSupabase()
     .from('employes')
-    .select('id, nom, prenom')
+    .select('*')
     .eq('actif', true)
     .order('nom', { ascending: true })
-  return (data ?? []) as EmployeNom[]
+  // Le planning filtre ensuite par mois selon date_entree / date_sortie
+  return ((data ?? []) as EmployeNom[]).map(e => ({
+    id: e.id, nom: e.nom, prenom: e.prenom,
+    date_entree: e.date_entree ?? null, date_sortie: e.date_sortie ?? null,
+  }))
 }
 
 export async function getAbsencesEmployee(

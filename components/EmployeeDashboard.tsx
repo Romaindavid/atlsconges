@@ -6,7 +6,7 @@ import { changeEmployee, getAbsencesEquipe } from '@/app/actions'
 import type { AbsenceEmploye, AbsenceEquipe, EmployeNom } from '@/app/actions'
 import { getJoursFeriesOverrides } from '@/app/temps/actions'
 import type { JourneeEntry, JourFerieOverride, VacancePeriode } from '@/app/temps/actions'
-import { formatDateFR, isJourFerie, libelleDuree } from '@/lib/calcul-jours'
+import { formatDateFR, isJourFerie, libelleDuree, presentSurPeriode, bornesMois } from '@/lib/calcul-jours'
 import FeuilleTempsCore from '@/components/FeuilleTempsCore'
 
 // ─── Helpers calendrier ───────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ export default function EmployeeDashboard({
                         </tr>
                       </thead>
                       <tbody>
-                        {employesNoms.map(emp => (
+                        {employesNoms.filter(emp => presentSurPeriode(emp, ...bornesMois(teamMois, teamAnnee))).map(emp => (
                           <tr key={emp.id} className={`border-t border-marine-100 hover:bg-marine-50/30 ${emp.nom === employee.nom && emp.prenom === employee.prenom ? 'bg-orange-50/30' : ''}`}>
                             <td className={`sticky left-0 z-10 bg-white px-3 py-1.5 font-medium whitespace-nowrap border-r border-marine-100 ${emp.nom === employee.nom && emp.prenom === employee.prenom ? 'text-orange-600' : 'text-marine-800'}`}>
                               {emp.prenom} {emp.nom}

@@ -133,3 +133,17 @@ export type AbsencePourRecup = { date_debut: string; date_fin: string; demi_jour
 export function estJourAbsenceComplete(absences: AbsencePourRecup[], iso: string): boolean {
   return absences.some(a => !a.demi_journee && a.date_debut <= iso && a.date_fin >= iso)
 }
+
+// ─── Arrivées / départs ───────────────────────────────────────────────────────
+export type PeriodeEmploi = { date_entree?: string | null; date_sortie?: string | null }
+
+/** Le salarié fait-il partie de l'équipe sur au moins un jour de [debut, fin] ? (dates ISO) */
+export function presentSurPeriode(emp: PeriodeEmploi, debut: string, fin: string): boolean {
+  return (!emp.date_entree || emp.date_entree <= fin) && (!emp.date_sortie || emp.date_sortie >= debut)
+}
+
+/** Bornes ISO d'un mois : ['2026-10-01', '2026-10-31'] */
+export function bornesMois(mois: number, annee: number): [string, string] {
+  const m = String(mois).padStart(2, '0')
+  return [`${annee}-${m}-01`, `${annee}-${m}-${String(new Date(annee, mois, 0).getDate()).padStart(2, '0')}`]
+}

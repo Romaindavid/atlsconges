@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import type { AbsenceAvecStatut, FeuilleTempsAvecBateaux, Employe, JourFerieEntry, VacanceObligatoire } from '@/app/admin/actions'
-import { updateAbsenceDatesEtStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
-import { isJourFerie, formatDateFR, calculerJoursOuvres, libelleDuree } from '@/lib/calcul-jours'
+import { updateAbsenceDatesEtStatut, logoutAdmin, createEmploye, updateEmploye, deleteEmploye, updateSoldeDepart, setJourFerieOverride, setPinEmploye, setDatesEmploi, setAnniversaireEmploye, createVacanceObligatoire, deleteVacanceObligatoire } from '@/app/admin/actions'
+import { isJourFerie, formatDateFR, calculerJoursOuvres, libelleDuree, presentSurPeriode, bornesMois, dateAujourdhui } from '@/lib/calcul-jours'
 import { useRouter } from 'next/navigation'
 function daysInMonth(m: number, a: number) { return new Date(a, m, 0).getDate() }
 function isoDay(a: number, m: number, d: number) {
@@ -69,6 +69,8 @@ export default function AdminDashboard({
   const [empPin, setEmpPin] = useState('')
   const [empDateNaissance, setEmpDateNaissance] = useState('')
   const [empJourAnniv, setEmpJourAnniv] = useState('')
+  const [empDateEntree, setEmpDateEntree] = useState('')
+  const [empDateSortie, setEmpDateSortie] = useState('')
   const [empErreur, setEmpErreur] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
@@ -85,6 +87,9 @@ export default function AdminDashboard({
   // État local pour les filtres
   const [mois, setMois] = useState(moisSelectionne)
   const [annee, setAnnee] = useState(anneeSelectionnee)
+  // Salariés présents sur le mois affiché (calendrier + export paie), selon arrivée / départ
+  const employesDuMois = employes.filter(e => presentSurPeriode(e, ...bornesMois(mois, annee)))
+  const aujourdhui = dateAujourdhui()
   const [recherche, setRecherche] = useState(salarieSearch)
 
   // Modal décision absence
@@ -146,6 +151,7 @@ export default function AdminDashboard({
   function ouvrirCreationEmploye() {
     setEmpNom(''); setEmpPrenom(''); setEmpSoldeDepart('0')
     setEmpPin(''); setEmpDateNaissance(''); setEmpJourAnniv('')
+    setEmpDateEntree(''); setEmpDateSortie('')
     setEmpErreur('')
     setEmpModal({ mode: 'create' })
   }
@@ -156,6 +162,7 @@ export default function AdminDashboard({
     setEmpPin(emp.code_pin ?? '')
     setEmpDateNaissance(emp.date_naissance ?? '')
     setEmpJourAnniv(emp.jour_anniversaire_pris ?? '')
+    setEmpDateEntree(emp.date_entree ?? ''); setEmpDateSortie(emp.date_sortie ?? '')
     setEmpErreur('')
     setEmpModal({ mode: 'edit', employe: emp })
   }
@@ -166,20 +173,22 @@ export default function AdminDashboard({
     startTransition(async () => {
       let res
       if (empModal?.mode === 'create') {
-        res = await createEmploye(empNom, empPrenom)
-        if (res.success && solde !== 0) {
-          router.refresh()
-        }
+        res = await createEmploye(empNom, empPrenom, {
+          solde_depart_recuperation: solde,
+          date_entree: empDateEntree || null,
+          date_sortie: empDateSortie || null,
+        })
       } else if (empModal?.employe) {
         const id = empModal.employe.id
         const pinVal = empPin.trim().replace(/\D/g, '').slice(0, 4) || null
-        const [resEmp, resSolde] = await Promise.all([
+        const [resEmp, resSolde, , , resDates] = await Promise.all([
           updateEmploye(id, empNom, empPrenom),
           updateSoldeDepart(id, solde),
           setPinEmploye(id, pinVal),
           setAnniversaireEmploye(id, empDateNaissance || null, empJourAnniv || null),
+          setDatesEmploi(id, empDateEntree || null, empDateSortie || null),
         ])
-        res = resEmp.success ? resSolde : resEmp
+        res = !resEmp.success ? resEmp : !resDates.success ? resDates : resSolde
       } else return
 
       if (res.success) {
@@ -269,7 +278,7 @@ export default function AdminDashboard({
     const fmtPeriode = (abs: AbsenceAvecStatut[]) =>
       abs.map(a => `${fmtDate(a.date_debut)}→${fmtDate(a.date_fin)}`).join('; ')
 
-    const rows = employes.map(emp => {
+    const rows = employesDuMois.map(emp => {
       const k = `${emp.nom}||${emp.prenom}`
       const feuilles = byEmp.get(k) || []
       const absEmp   = absEmpMap.get(k) || []
@@ -580,7 +589,7 @@ export default function AdminDashboard({
                         </tr>
                       </thead>
                       <tbody>
-                        {employes.map(emp => {
+                        {employesDuMois.map(emp => {
                           const anniversaireJour = anniversaireParEmpId.get(emp.id)
                           return (
                           <tr key={emp.id} className="border-t border-marine-100 hover:bg-marine-50/30">
@@ -646,7 +655,13 @@ export default function AdminDashboard({
         {onglet === 'employes' && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-marine-600 text-sm">{employes.length} employé{employes.length > 1 ? 's' : ''}</p>
+              <p className="text-marine-600 text-sm">
+                {employes.length} employé{employes.length > 1 ? 's' : ''}
+                {(() => {
+                  const partis = employes.filter(e => e.date_sortie && e.date_sortie < aujourdhui).length
+                  return partis > 0 ? ` (dont ${partis} parti${partis > 1 ? 's' : ''})` : ''
+                })()}
+              </p>
               <button
                 onClick={ouvrirCreationEmploye}
                 className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors shadow-sm"
@@ -677,9 +692,21 @@ export default function AdminDashboard({
                     {employes.map((emp) => {
                       const sd = emp.solde_depart_recuperation ?? 0
                       return (
-                      <tr key={emp.id} className="hover:bg-marine-50 transition-colors">
+                      <tr key={emp.id} className={`hover:bg-marine-50 transition-colors ${emp.date_sortie && emp.date_sortie < aujourdhui ? 'opacity-50' : ''}`}>
                         <td className="px-5 py-4 text-marine-800 font-semibold">{emp.nom}</td>
-                        <td className="px-5 py-4 text-marine-700">{emp.prenom}</td>
+                        <td className="px-5 py-4 text-marine-700">
+                          {emp.prenom}
+                          {emp.date_sortie && (
+                            <span className="ml-2 text-xs font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg whitespace-nowrap">
+                              {emp.date_sortie < aujourdhui ? 'Parti(e)' : 'Départ'} le {formatDateFR(emp.date_sortie)}
+                            </span>
+                          )}
+                          {emp.date_entree && emp.date_entree > aujourdhui && (
+                            <span className="ml-2 text-xs font-medium bg-success-100 text-success-600 px-2 py-0.5 rounded-lg whitespace-nowrap">
+                              Arrive le {formatDateFR(emp.date_entree)}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-4 text-center">
                           <span className={`text-sm font-bold px-2 py-1 rounded-lg ${
                             sd > 0 ? 'bg-success-100 text-success-600' :
@@ -997,6 +1024,23 @@ export default function AdminDashboard({
                   className="w-full border-2 border-marine-200 rounded-xl px-4 py-2 text-marine-900 placeholder:text-marine-300 focus:border-orange-500 focus:outline-none transition-colors tracking-widest text-lg"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-marine-700 font-semibold mb-1">📥 Arrivée</label>
+                  <input type="date" value={empDateEntree} onChange={e => setEmpDateEntree(e.target.value)}
+                    className="w-full border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 focus:border-orange-500 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-marine-700 font-semibold mb-1">📤 Départ</label>
+                  <input type="date" value={empDateSortie} min={empDateEntree || undefined} onChange={e => setEmpDateSortie(e.target.value)}
+                    className="w-full border-2 border-marine-200 rounded-xl px-3 py-2 text-marine-900 focus:border-orange-500 focus:outline-none transition-colors"
+                  />
+                </div>
+                <p className="col-span-2 text-marine-400 text-xs -mt-1">
+                  Optionnel. Départ = dernier jour dans l&apos;équipe : le salarié disparaît ensuite de la connexion, du planning et de l&apos;export paie, mais son historique est conservé.
+                </p>
+              </div>
               <div>
                 <label className="block text-marine-700 font-semibold mb-1">🎂 Date de naissance</label>
                 <input type="date" value={empDateNaissance} onChange={e => setEmpDateNaissance(e.target.value)}
@@ -1045,6 +1089,7 @@ export default function AdminDashboard({
                 return emp ? `${emp.prenom} ${emp.nom}` : ''
               })()}
               <br />Cette action est irréversible.
+              <br /><span className="text-marine-400">Pour un départ, préférez « Modifier » → date de départ : l&apos;historique reste visible sur les mois passés.</span>
             </p>
             <div className="flex gap-3">
               <button

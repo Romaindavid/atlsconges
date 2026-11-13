@@ -5,7 +5,7 @@ Application web interne pour la gestion des congés et feuilles de temps.
 ## Stack
 
 - **Next.js 16** (App Router, Server Actions)
-- **Supabase** (PostgreSQL + RLS)
+- **Neon** (PostgreSQL, driver `@neondatabase/serverless`, requêtes SQL dans les server actions)
 - **Tailwind CSS v4**
 - **Vercel** (déploiement)
 
@@ -28,19 +28,20 @@ cd atlsconges
 npm install
 ```
 
-### 2. Configurer Supabase
+### 2. Configurer la base (Neon)
 
-1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Aller dans **SQL Editor** et exécuter le contenu de `supabase-schema.sql`, puis les fichiers `supabase-migration-*.sql` (dont `supabase-migration-demi-journee.sql` pour les demi-journées d'absence)
-3. Récupérer les clés API dans **Settings > API**
+1. Créer une base sur [neon.tech](https://neon.tech), ou depuis Vercel : projet → **Storage** → **Neon**
+2. Copier la chaîne de connexion (`postgresql://…`) dans `DATABASE_URL`
+3. Créer les tables : exécuter `db/schema.sql` dans l'éditeur SQL de Neon (rejouable sans risque)
+
+`scripts/migrer-supabase-vers-neon.mjs` a servi à la copie unique des données depuis l'ancienne base Supabase (novembre 2026).
 
 ### 3. Variables d'environnement
 
 Créer `.env.local` à la racine :
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://VOTRE_PROJECT_ID.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=VOTRE_ANON_KEY
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
 ADMIN_PASSWORD=votre_mot_de_passe_admin
 
 # Optionnel : notification par e-mail à la direction à chaque nouvelle demande d'absence
@@ -80,7 +81,7 @@ app/
     page.tsx            ← Dashboard direction
     actions.ts          ← Server Actions (auth, CRUD)
 lib/
-  supabase.ts           ← Client Supabase + types
+  db.ts                 ← Connexion Neon + types
   calcul-jours.ts       ← Calcul jours ouvrés
 components/
   Header.tsx            ← Logo + navigation
@@ -88,5 +89,5 @@ components/
   FormTemps.tsx         ← Feuille de temps (client)
   AdminDashboard.tsx    ← Dashboard admin (client)
   AdminLogin.tsx        ← Écran de connexion admin
-supabase-schema.sql     ← SQL à exécuter dans Supabase
+db/schema.sql           ← Schéma Postgres (Neon)
 ```

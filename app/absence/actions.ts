@@ -1,6 +1,6 @@
 'use server'
 
-import { getSupabase } from '@/lib/supabase'
+import { getSql } from '@/lib/db'
 import { envoyerEmail } from '@/lib/email'
 import { formatDateFR, libelleDuree, DEMI_JOURNEES, demiJourneePossible } from '@/lib/calcul-jours'
 import type { DemiJournee } from '@/lib/calcul-jours'
@@ -53,26 +53,22 @@ export async function soumettreAbsence(data: AbsenceFormData): Promise<ActionRes
     return { success: false, message: 'Veuillez préciser le type d\'absence.' }
   }
 
-  const { data: inserted, error } = await getSupabase()
-    .from('absences')
-    .insert({
-      nom: data.nom.trim(),
-      prenom: data.prenom.trim(),
-      type_absence: data.type_absence,
-      type_absence_detail: data.type_absence_detail?.trim() || null,
-      date_debut: data.date_debut,
-      date_fin: data.date_fin,
-      jours_ouvres: data.jours_ouvres,
-      // Colonne ajoutée par supabase-migration-demi-journee.sql : envoyée seulement si utilisée
-      ...(data.demi_journee ? { demi_journee: data.demi_journee } : {}),
-      commentaire_salarie: data.commentaire_salarie?.trim() || null,
-      statut: 'en_attente',
-    })
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('Erreur Supabase:', error)
+  let inserted: { id: string } | undefined
+  try {
+    const rows = await getSql()`
+      insert into absences (
+        nom, prenom, type_absence, type_absence_detail, date_debut, date_fin,
+        jours_ouvres, demi_journee, commentaire_salarie, statut
+      ) values (
+        ${data.nom.trim()}, ${data.prenom.trim()}, ${data.type_absence},
+        ${data.type_absence_detail?.trim() || null}, ${data.date_debut}, ${data.date_fin},
+        ${data.jours_ouvres}, ${data.demi_journee || null},
+        ${data.commentaire_salarie?.trim() || null}, 'en_attente'
+      )
+      returning id`
+    inserted = rows[0] as { id: string }
+  } catch (error) {
+    console.error('Erreur base de données:', error)
     return {
       success: false,
       message: 'Une erreur est survenue lors de l\'enregistrement. Veuillez réessayer.',

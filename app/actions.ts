@@ -1,7 +1,7 @@
 'use server'
 
 import { cookies } from 'next/headers'
-import { getSupabase } from '@/lib/supabase'
+import { getSql } from '@/lib/db'
 
 const EMPLOYEE_AUTH_COOKIE = 'atls_employee_auth'
 const EMPLOYEE_COOKIE = 'atls_employee'
@@ -96,12 +96,8 @@ export type AbsenceEmploye = {
 export async function selectEmployeeWithPin(
   id: string, nom: string, prenom: string, pin: string
 ): Promise<{ success: boolean; message?: string }> {
-  const { data } = await getSupabase()
-    .from('employes')
-    .select('code_pin')
-    .eq('id', id)
-    .single()
-  const storedPin: string | null = (data as { code_pin: string | null } | null)?.code_pin ?? null
+  const rows = await getSql()`select code_pin from employes where id = ${id}`
+  const storedPin: string | null = (rows[0] as { code_pin: string | null } | undefined)?.code_pin ?? null
   if (storedPin && storedPin !== pin) {
     return { success: false, message: 'Code PIN incorrect.' }
   }
@@ -129,14 +125,15 @@ export async function getAbsencesEquipe(mois: number, annee: number): Promise<Ab
   const dateDebutMois = `${annee}-${String(mois).padStart(2, '0')}-01`
   const dernierJour = new Date(annee, mois, 0).getDate()
   const dateFinMois = `${annee}-${String(mois).padStart(2, '0')}-${String(dernierJour).padStart(2, '0')}`
-  const { data, error } = await getSupabase()
-    .from('absences')
-    .select('*')
-    .eq('statut', 'accorde')
-    .lte('date_debut', dateFinMois)
-    .gte('date_fin', dateDebutMois)
-    .order('date_debut', { ascending: true })
-  if (error) return []
+  let data
+  try {
+    data = await getSql()`
+      select * from absences
+      where statut = 'accorde' and date_debut <= ${dateFinMois} and date_fin >= ${dateDebutMois}
+      order by date_debut asc`
+  } catch {
+    return []
+  }
   // Ne renvoie au navigateur que les champs du planning (pas les commentaires des collègues)
   return (data as (AbsenceEquipe & Record<string, unknown>)[]).map(a => ({
     nom: a.nom,
@@ -151,11 +148,7 @@ export async function getAbsencesEquipe(mois: number, annee: number): Promise<Ab
 export type EmployeNom = { id: string; nom: string; prenom: string; date_entree?: string | null; date_sortie?: string | null }
 
 export async function getEmployeNoms(): Promise<EmployeNom[]> {
-  const { data } = await getSupabase()
-    .from('employes')
-    .select('*')
-    .eq('actif', true)
-    .order('nom', { ascending: true })
+  const data = await getSql()`select * from employes where actif = true order by nom asc`
   // Le planning filtre ensuite par mois selon date_entree / date_sortie
   return ((data ?? []) as EmployeNom[]).map(e => ({
     id: e.id, nom: e.nom, prenom: e.prenom,
@@ -167,17 +160,15 @@ export async function getAbsencesEmployee(
   nom: string,
   prenom: string
 ): Promise<AbsenceEmploye[]> {
-  const { data, error } = await getSupabase()
-    .from('absences')
-    .select('*')
-    .eq('nom', nom)
-    .eq('prenom', prenom)
-    .order('date_demande', { ascending: false })
-    .limit(20)
-
-  if (error) {
+  try {
+    const data = await getSql()`
+      select * from absences
+      where nom = ${nom} and prenom = ${prenom}
+      order by date_demande desc
+      limit 20`
+    return data as AbsenceEmploye[]
+  } catch (error) {
     console.error('Erreur getAbsencesEmployee:', error)
     return []
   }
-  return data as AbsenceEmploye[]
 }

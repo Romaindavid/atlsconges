@@ -1,6 +1,6 @@
 'use server'
 
-import { getSupabase } from '@/lib/supabase'
+import { getSql } from '@/lib/db'
 import { estJourAbsenceComplete } from '@/lib/calcul-jours'
 import type { AbsencePourRecup } from '@/lib/calcul-jours'
 
@@ -42,20 +42,23 @@ export async function getFeuillesMois(
   const dernierJour = new Date(annee, mois, 0).getDate()
   const dateFin = `${annee}-${String(mois).padStart(2, '0')}-${String(dernierJour).padStart(2, '0')}`
 
-  const { data, error } = await getSupabase()
-    .from('feuilles_temps')
-    .select('id, date_journee, heures_travaillees, heures_a_recuperer, commentaire, pointes_bateaux(id, nom_bateau, panier_repas)')
-    .eq('nom', nom)
-    .eq('prenom', prenom)
-    .gte('date_journee', dateDebut)
-    .lte('date_journee', dateFin)
-    .order('date_journee', { ascending: true })
-
-  if (error) {
+  try {
+    const data = await getSql()`
+      select f.id, f.date_journee, f.heures_travaillees, f.heures_a_recuperer, f.commentaire,
+        coalesce(
+          (select json_agg(json_build_object('id', p.id, 'nom_bateau', p.nom_bateau, 'panier_repas', p.panier_repas))
+           from pointes_bateaux p where p.feuille_temps_id = f.id),
+          '[]'::json
+        ) as pointes_bateaux
+      from feuilles_temps f
+      where f.nom = ${nom} and f.prenom = ${prenom}
+        and f.date_journee >= ${dateDebut} and f.date_journee <= ${dateFin}
+      order by f.date_journee asc`
+    return data as JourneeEntry[]
+  } catch (error) {
     console.error('Erreur getFeuillesMois:', error)
     return []
   }
-  return data as JourneeEntry[]
 }
 
 export async function sauvegarderJournee(
@@ -68,69 +71,49 @@ export async function sauvegarderJournee(
     return { success: false, message: 'La date est obligatoire.' }
   }
 
-  const supabase = getSupabase()
-
-  const { data: existing } = await supabase
-    .from('feuilles_temps')
-    .select('id')
-    .eq('nom', data.nom.trim())
-    .eq('prenom', data.prenom.trim())
-    .eq('date_journee', data.date_journee)
-    .single()
-
-  let feuilleId: string
-
-  if (existing) {
-    feuilleId = existing.id
-    const { error } = await supabase
-      .from('feuilles_temps')
-      .update({
-        heures_travaillees: data.heures_travaillees,
-        heures_a_recuperer: data.heures_a_recuperer,
-        commentaire: data.commentaire || null,
-      })
-      .eq('id', feuilleId)
-
-    if (error) {
-      console.error('Erreur update feuille:', error)
-      return { success: false, message: 'Erreur lors de la mise à jour.' }
-    }
-    const { error: deleteError } = await supabase.from('pointes_bateaux').delete().eq('feuille_temps_id', feuilleId)
-    if (deleteError) {
-      console.error('Erreur suppression pointes:', deleteError)
-      return { success: false, message: 'Erreur lors de la mise à jour des pointes bateau.' }
-    }
-  } else {
-    const { data: newFeuille, error } = await supabase
-      .from('feuilles_temps')
-      .insert({
-        nom: data.nom.trim(),
-        prenom: data.prenom.trim(),
-        date_journee: data.date_journee,
-        heures_travaillees: data.heures_travaillees,
-        heures_a_recuperer: data.heures_a_recuperer,
-        commentaire: data.commentaire || null,
-      })
-      .select('id')
-      .single()
-
-    if (error || !newFeuille) {
-      console.error('Erreur insert feuille:', error)
-      return { success: false, message: 'Erreur lors de la création.' }
-    }
-    feuilleId = newFeuille.id
-  }
-
+  const sql = getSql()
+  const nom = data.nom.trim()
+  const prenom = data.prenom.trim()
   const pointes = data.pointes_bateaux.filter((p) => p.nom_bateau.trim())
-  if (pointes.length > 0) {
-    await supabase.from('pointes_bateaux').insert(
-      pointes.map((p) => ({
-        feuille_temps_id: feuilleId,
-        nom_bateau: p.nom_bateau.trim(),
-        heures: 1,
-        panier_repas: p.panier_repas,
-      }))
-    )
+
+  try {
+    const [existing] = await sql`
+      select id from feuilles_temps
+      where nom = ${nom} and prenom = ${prenom} and date_journee = ${data.date_journee}
+      limit 1`
+
+    let feuilleId: string
+    if (existing) {
+      feuilleId = existing.id as string
+      // Mise à jour + remplacement des pointes en une seule transaction
+      await sql.transaction([
+        sql`
+          update feuilles_temps set
+            heures_travaillees = ${data.heures_travaillees},
+            heures_a_recuperer = ${data.heures_a_recuperer},
+            commentaire = ${data.commentaire || null}
+          where id = ${feuilleId}`,
+        sql`delete from pointes_bateaux where feuille_temps_id = ${feuilleId}`,
+      ])
+    } else {
+      const [newFeuille] = await sql`
+        insert into feuilles_temps (nom, prenom, date_journee, heures_travaillees, heures_a_recuperer, commentaire)
+        values (${nom}, ${prenom}, ${data.date_journee}, ${data.heures_travaillees},
+                ${data.heures_a_recuperer}, ${data.commentaire || null})
+        returning id`
+      feuilleId = newFeuille.id as string
+    }
+
+    if (pointes.length > 0) {
+      await sql.transaction(
+        pointes.map((p) => sql`
+          insert into pointes_bateaux (feuille_temps_id, nom_bateau, heures, panier_repas)
+          values (${feuilleId}, ${p.nom_bateau.trim()}, 1, ${p.panier_repas})`)
+      )
+    }
+  } catch (error) {
+    console.error('Erreur sauvegarderJournee:', error)
+    return { success: false, message: 'Erreur lors de l\'enregistrement de la journée.' }
   }
 
   return { success: true, message: 'Journée enregistrée.' }
@@ -143,22 +126,26 @@ export async function sauvegarderJournee(
 export type VacancePeriode = { date_debut: string; date_fin: string }
 
 export async function getVacancesObligatoires(): Promise<VacancePeriode[]> {
-  const { data } = await getSupabase()
-    .from('vacances_obligatoires')
-    .select('date_debut, date_fin')
-    .order('date_debut', { ascending: true })
-  return (data ?? []) as VacancePeriode[]
+  try {
+    return (await getSql()`
+      select date_debut, date_fin from vacances_obligatoires order by date_debut asc`) as VacancePeriode[]
+  } catch (error) {
+    console.error('Erreur getVacancesObligatoires:', error)
+    return []
+  }
 }
 
 export type JourFerieOverride = { date: string; actif: boolean }
 
 export async function getJoursFeriesOverrides(annee: number): Promise<JourFerieOverride[]> {
-  const { data } = await getSupabase()
-    .from('jours_feries_override')
-    .select('date, actif')
-    .gte('date', `${annee}-01-01`)
-    .lte('date', `${annee}-12-31`)
-  return (data ?? []) as JourFerieOverride[]
+  try {
+    return (await getSql()`
+      select date, actif from jours_feries_override
+      where date >= ${`${annee}-01-01`} and date <= ${`${annee}-12-31`}`) as JourFerieOverride[]
+  } catch (error) {
+    console.error('Erreur getJoursFeriesOverrides:', error)
+    return []
+  }
 }
 
 export async function getSoldeRecupComplet(
@@ -166,29 +153,16 @@ export async function getSoldeRecupComplet(
   prenom: string,
   employeId: string
 ): Promise<number> {
-  const supabase = getSupabase()
-  const [feuillesRes, empRes, absencesRes] = await Promise.all([
-    supabase
-      .from('feuilles_temps')
-      .select('date_journee, heures_a_recuperer')
-      .eq('nom', nom)
-      .eq('prenom', prenom),
-    supabase
-      .from('employes')
-      .select('solde_depart_recuperation')
-      .eq('id', employeId)
-      .single(),
-    supabase
-      .from('absences')
-      .select('*')
-      .eq('nom', nom)
-      .eq('prenom', prenom)
-      .eq('statut', 'accorde'),
+  const sql = getSql()
+  const [feuilles, emp, absencesRows] = await Promise.all([
+    sql`select date_journee, heures_a_recuperer from feuilles_temps where nom = ${nom} and prenom = ${prenom}`,
+    sql`select solde_depart_recuperation from employes where id = ${employeId}`,
+    sql`select * from absences where nom = ${nom} and prenom = ${prenom} and statut = 'accorde'`,
   ])
-  const absences = (absencesRes.data ?? []) as AbsencePourRecup[]
-  const totalRecup = (feuillesRes.data ?? [])
-    .filter((e: { date_journee: string }) => !estJourAbsenceComplete(absences, e.date_journee))
-    .reduce((s: number, e: { heures_a_recuperer: number }) => s + (e.heures_a_recuperer ?? 0), 0)
-  const soldeDepart = (empRes.data as { solde_depart_recuperation?: number } | null)?.solde_depart_recuperation ?? 0
+  const absences = absencesRows as AbsencePourRecup[]
+  const totalRecup = (feuilles as { date_journee: string; heures_a_recuperer: number | null }[])
+    .filter((e) => !estJourAbsenceComplete(absences, e.date_journee))
+    .reduce((s, e) => s + (e.heures_a_recuperer ?? 0), 0)
+  const soldeDepart = (emp[0] as { solde_depart_recuperation?: number | null } | undefined)?.solde_depart_recuperation ?? 0
   return Number((soldeDepart + totalRecup).toFixed(2))
 }

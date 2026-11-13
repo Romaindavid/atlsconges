@@ -218,7 +218,7 @@ export default function AdminDashboard({
     if (!res.success) {
       // Rollback
       setJoursFeries(prev => prev.map(f => f.date === date ? { ...f, actif: currentActif } : f))
-      setFeriesErreur('⚠️ Erreur de sauvegarde. La table jours_feries_override n\'existe peut-être pas encore — exécutez supabase-migration-jours-feries.sql dans Supabase.')
+      setFeriesErreur('⚠️ Erreur de sauvegarde. Réessayez dans un instant.')
     }
   }
 
